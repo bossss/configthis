@@ -1,17 +1,12 @@
 +-----------------------------------------------------------------------------+
 | PREREQUISITES:                                                              |
-|                                                                             |
 |   Presumes prior execution of ConfigMake -this                              |
 |   Presumes prior execution of ConfigMake -project...                        |
 |   Presumes directory /home/loginID exists (substitute your loginID)         |
 |   Presumes directory /home/loginID/ConfigThis/aProject/aPlatform_aVersion   |
-|                                                                             |
 | NOTES:                                                                      |
-|                                                                             |
 |   Refer to ConfigThis.html for complete documentation                       |
-|                                                                             |
 | USAGE:                                                                      |
-|                                                                             |
 |   Change current working directory (substitute your loginID)                |
 |     cd /home/loginID                                                        |
 |                                                                             |
@@ -23,6 +18,9 @@
 |                                                                             |
 |   Execute ConfigThis to list logs                                           |
 |     ConfigThis -logs aProject aPlatform aVersion                            |
+|                                                                             |
+|   Execute ConfigThis to list logs                                           |
+|     ConfigThis -stops aProject aPlatform aVersion                           |
 |                                                                             |
 |   Execute ConfigThis to edit a log                                          |
 |     ConfigThis -log                                                         |

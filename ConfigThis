@@ -8,7 +8,7 @@
 #  Author:                   Barry Floyd (troybarryfloyd)
 #  Description:              Auditing tool
 #  Documentation:            README, ConfigThis.html, ConfigMake.txt, ConfigThis.txt
-#  Latest Version:           2014.10.23
+#  Latest Version:           2014.10.27
 #  License:                  GNU GPL v3 2007
 #  Copyright (c) 2014 bossss.org
 #
@@ -620,7 +620,7 @@ fi
 #
 # check parameter 1 for '-logs' - list all log files
 #
-if [[ ! -z "${1}" && ( "${1}" == "-Logs" || "${1}" == "--Logs" || "${1}" == "-logs" || "${1}" == "--logs" || "${1}" == "-l" || "${1}" == "-L" || "${1}" == "--l" || "${1}" == "--L" ) ]]
+if [[ ! -z "${1}" && ( "${1}" == "-Logs" || "${1}" == "--Logs" || "${1}" == "-logs" || "${1}" == "--logs" ) ]]
 then
   if [[ -z "${2}" || -z "${3}" || -z "${4}" ]]
   then
@@ -658,6 +658,64 @@ then
   ShowMessage "show" "-----     ConfigThis aProject aPlatform aVersion aCategory"
   ShowMessage "show" "-----     ConfigThis aProject aPlatform aVersion aCategory aLink"
   ShowMessage "show" "-----     ConfigThis aProject aPlatform aVersion -nostop"
+  ShowMessage "show" "-----"
+  ShowMessage "show" "-----   Execute ConfigThis to edit a log"
+  ShowMessage "show" "-----     ConfigThis -log"
+  ShowMessage "show" "-----       defaults to the last log created by ConfigThis"
+  ShowMessage "show" "-----     ConfigThis -log aProject aPlatform aVersion"
+  ShowMessage "show" "-----       defaults to the last log created for the project"
+  ShowMessage "show" "-----"
+
+  exit 0
+fi
+
+#---------------------------------------------------
+#
+# check parameter 1 for '-stops' - list all stop files
+#
+if [[ ! -z "${1}" && ( "${1}" == "-Stops" || "${1}" == "--Stops" || "${1}" == "-stops" || "${1}" == "--stops" || "${1}" == "-s" || "${1}" == "-S" || "${1}" == "--s" || "${1}" == "--S" ) ]]
+then
+  if [[ -z "${2}" || -z "${3}" || -z "${4}" ]]
+  then
+    ShowMessage "show" " "
+    ShowMessage "show" "----- One or more parameters not provided"
+    ShowMessage "show" "----- [1] required -  project: ${2}"
+    ShowMessage "show" "----- [2] required - platform: ${3}"
+    ShowMessage "show" "----- [3] required -  version: ${4}"
+    ShowMessage "show" " "
+
+    exit 0
+
+  else
+    ThisPlatformVersion="${ConfigThis_home}/${ConfigThis_root}/${2}/${3}_${4}"
+
+    ShowMessage "show" "----- List of stop files"
+
+    if [[ -d "${ThisPlatformVersion}" && ! -L "${ThisPlatformVersion}" && -x "${ThisPlatformVersion}" ]]
+    then
+      #ListDirectory "path" "f" "name" "indent" "label" "1"
+      ListDirectory "${ThisPlatformVersion}" "f" "*.stop" "      " "stop" "1"
+
+    else
+      ShowMessage "show" " "
+      ShowMessage "show" "----- This directory does not exist:"
+      ShowMessage "show" "-----   ${ThisPlatformVersion}"
+    fi
+
+  fi
+
+  ShowMessage "show" "-----"
+  ShowMessage "show" "----- Next:"
+  ShowMessage "show" "-----"  Fix the stop file bugs
+  ShowMessage "show" "-----"
+  ShowMessage "show" "-----   Execute ConfigThis for testing and reporting"
+  ShowMessage "show" "-----     ConfigThis aProject aPlatform aVersion"
+  ShowMessage "show" "-----     ConfigThis aProject aPlatform aVersion aCategory"
+  ShowMessage "show" "-----     ConfigThis aProject aPlatform aVersion aCategory aLink"
+  ShowMessage "show" "-----     ConfigThis aProject aPlatform aVersion -nostop"
+  ShowMessage "show" "-----"
+  ShowMessage "show" "-----   Execute ConfigThis to list log files"
+  ShowMessage "show" "-----     ConfigThis -logs aProject aPlatform aVersion"
   ShowMessage "show" "-----"
   ShowMessage "show" "-----   Execute ConfigThis to edit a log"
   ShowMessage "show" "-----     ConfigThis -log"

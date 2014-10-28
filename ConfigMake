@@ -1795,67 +1795,59 @@ then
 
     strVendorFile="${2}"
 
-    if [[ "${strVendorFile}" == "-all" ]]
+    if [[ "${strVendorFile}" != "-all" && ! -z "${3}" && "${strVendorFile:0:1}" == "/" ]]
     then
-
-      ShowMessage "show" "Vendor file: ALL"
-
-    else
       ShowMessage "show" "Vendor file: ${strVendorFile}"
 
-      if [[ ! -z "${3}" && "${strVendorFile:0:1}" == "/" ]]
+      strVendorPathFile = "${strVendorFile}"
+
+      strProjectLink="link-$(echo ${strVendorFile} | awk -F/ '{print $NF}')"
+
+      ShowMessage "show" "Category   : ${3}"
+
+      if [[ ! -z "${3}" ]]
       then
-        strVendorPathFile = "${strVendorFile}"
+        strCategory="${3}"
 
-        strProjectLink="link-$(echo ${strVendorFile} | awk -F/ '{print $NF}')"
+      else
+        strCategory=1000
 
-        ShowMessage "show" "Category   : ${3}"
+      fi
 
-        if [[ ! -z "${3}" ]]
+      strCategoryPath="$(GetCategoryPathFromCode ${strCategory})"
+
+      ShowMessage "show" "Cate Path  : ${strCategoryPath}"
+
+      if [[ ! -z "${4}" ]]
+      then
+        ShowMessage "show" "Project    : ${4}"
+
+        strProject="${4}"
+        strProjectPath="${ConfigThis_projects}/${strProject}"
+
+        if [[ ! -z "${5}" ]]
         then
-          strCategory="${3}"
+          ShowMessage "show" "Platform   : ${5}"
 
-        else
-          strCategory=1000
+          strPlatform="${5}"
 
-        fi
-
-        strCategoryPath="$(GetCategoryPathFromCode ${strCategory})"
-
-        ShowMessage "show" "Cate Path  : ${strCategoryPath}"
-
-        if [[ ! -z "${4}" ]]
-        then
-          ShowMessage "show" "Project    : ${4}"
-
-          strProject="${4}"
-          strProjectPath="${ConfigThis_projects}/${strProject}"
-
-          if [[ ! -z "${5}" ]]
+          if [[ ! -z "${6}" ]]
           then
-            ShowMessage "show" "Platform   : ${5}"
+            ShowMessage "show" "Version    : ${6}"
 
-            strPlatform="${5}"
+            strVersion="${6}"
 
-            if [[ ! -z "${6}" ]]
+            strProjectPlatformVersionCategoryPath="${strProjectPath}/${strPlatform}_${strVersion}/${strCategoryPath}"
+
+            ShowMessage "show" "Full path  : ${strProjectPlatformVersionCategoryPath}"
+
+            if [[ ! -d "${strProjectPlatformVersionCategoryPath}" ||  -L "${strProjectPlatformVersionCategoryPath}" || ! -x "${strProjectPlatformVersionCategoryPath}" ]]
             then
-              ShowMessage "show" "Version    : ${6}"
+              ShowMessage "show" "-----"
+              ShowMessage "show" "----- Project directory ${strProjectPlatformVersionCategoryPath} is not valid"
+              ShowMessage "show" "-----"
 
-              strVersion="${6}"
-
-              strProjectPlatformVersionCategoryPath="${strProjectPath}/${strPlatform}_${strVersion}/${strCategoryPath}"
-
-              ShowMessage "show" "Full path  : ${strProjectPlatformVersionCategoryPath}"
-
-              if [[ ! -d "${strProjectPlatformVersionCategoryPath}" ||  -L "${strProjectPlatformVersionCategoryPath}" || ! -x "${strProjectPlatformVersionCategoryPath}" ]]
-              then
-                ShowMessage "show" "-----"
-                ShowMessage "show" "----- Project directory ${strProjectPlatformVersionCategoryPath} is not valid"
-                ShowMessage "show" "-----"
-
-                exit 0
-
-              fi
+              exit 0
 
             fi
 
@@ -1863,34 +1855,44 @@ then
 
         fi
 
+      fi
+
+    else
+      if [[ "${strVendorFile}" == "-all" ]]
+      then
+
+        ShowMessage "show" "Vendor file: ALL"
+
       else
         strProjectLink="link-${strVendorFile}"
 
-        if [[ ! -z "${3}" ]]
-        then
-          ShowMessage "show" "Vendor     : ${3}"
+      fi
 
-          strVendor="${3}"
+      if [[ ! -z "${3}" ]]
+      then
+        ShowMessage "show" "Vendor     : ${3}"
+
+        strVendor="${3}"
+
+        if [[ ! -z "${4}" ]]
+        then
+          ShowMessage "show" "Category   : ${4}"
 
           if [[ ! -z "${4}" ]]
           then
-            ShowMessage "show" "Category   : ${4}"
+            strCategory="${4}"
 
-            if [[ ! -z "${4}" ]]
-            then
-              strCategory="${4}"
+          else
+            strCategory=1000
 
-            else
-              strCategory=1000
+          fi
 
-            fi
+          strCategoryPath="$(GetCategoryPathFromCode ${strCategory})"
 
-            strCategoryPath="$(GetCategoryPathFromCode ${strCategory})"
+          ShowMessage "show" "Cate Path  : ${strCategoryPath}"
 
-            ShowMessage "show" "Cate Path  : ${strCategoryPath}"
-
-            #REFACTOR test for valid strCategoryPath
-
+          if [[ "${#strCategoryPath}" -gt 1 ]]
+          then
             if [[ ! -z "${5}" ]]
             then
               ShowMessage "show" "Project    : ${5}"
@@ -1946,15 +1948,27 @@ then
 
             fi
 
+          else
+            ShowMessage "show" "-----"
+            ShowMessage "info" "Category  : not valid"
+
           fi
 
+        else
+          ShowMessage "show" "-----"
+          ShowMessage "info" "Category  : not provided"
+
         fi
+
+      else
+        ShowMessage "show" "-----"
+        ShowMessage "info" "Vendor    : not provided"
 
       fi
 
     fi
 
-    if [[ -f "${strProjectPlatformVersionCategoryPath}/${strProjectLink}" &&  -L "${strProjectPlatformVersionCategoryPath}/${strProjectLink}" ]]
+    if [[ "${strVendorFile}" != "-all" && -f "${strProjectPlatformVersionCategoryPath}/${strProjectLink}" &&  -L "${strProjectPlatformVersionCategoryPath}/${strProjectLink}" ]]
     then
       ShowMessage "show" "-----"
       ShowMessage "info" "----- ${strProjectLink} exists"
@@ -1995,7 +2009,7 @@ then
 
       if [[ -n "${ThisItemList}" ]]
       then
-        i=1
+        i=0
 
         for ListThisItem in $ThisItemList
         do
