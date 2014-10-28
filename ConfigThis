@@ -694,7 +694,7 @@ then
     if [[ -d "${ThisPlatformVersion}" && ! -L "${ThisPlatformVersion}" && -x "${ThisPlatformVersion}" ]]
     then
       #ListDirectory "path" "f" "name" "indent" "label" "1"
-      ListDirectory "${ThisPlatformVersion}" "f" "*.stop" "      " "stop" "1"
+      ListDirectory "${ThisPlatformVersion}" "f" "*.stop" "      " "stop" "3"
 
     else
       ShowMessage "show" " "
@@ -706,7 +706,7 @@ then
 
   ShowMessage "show" "-----"
   ShowMessage "show" "----- Next:"
-  ShowMessage "show" "-----"  Fix the stop file bugs
+  ShowMessage "show" "-----   Fix the stop file bugs"
   ShowMessage "show" "-----"
   ShowMessage "show" "-----   Execute ConfigThis for testing and reporting"
   ShowMessage "show" "-----     ConfigThis aProject aPlatform aVersion"
