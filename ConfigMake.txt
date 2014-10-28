@@ -1,0 +1,37 @@
++-----------------------------------------------------------------------------+
+| SETUP:                                                                      |
+|   chmod u+x ./ConfigMake         | Enable execution mode                    |
+|   ./ConfigMake -this aDataPath   | Make sys dir's, data dir, cp files, etc. |
+| NOTES:                                                                      |
+|   Refer to ConfigThis.html for complete documentation                       |
+|   aDataPath is optional - defaults to ./                                    |
+|   DO NOT use webroot directory or application dev directory for aDataPath   |
+|   ConfigMake requires the sudo root password for chown and chmod            |
+| USAGE:                                                                      |
+|   ConfigMake -help                   | Display this info                    |
+|   ConfigMake -vendors                | List all vendor directories          |
+|   ConfigMake -vendor aVendor         | Create or Show aVendor directory     |
+|   ConfigMake -files aVendor          | List all vendor executable files     |
+|   ConfigMake -projects               | List all project directories         |
+|   ConfigMake -links aProject         | List all project links               |
+|   ConfigMake -default                | Create aProject dir's and sub-dir's  |
+|                                                                             |
+|   ConfigMake -project aProject aPlatform aVersion aGroup aOwner             |
+|     Create aProject directories or list aProject files if directory exists  |
+|                                                                             |
+|   ConfigMake -link aReqFile aVendor aCategory aProject aPlatform aVersion   |
+|     Create aProject aReqLink to aReqFile or list aReqLink if it exists      |
+|                                                                             |
+|   ConfigMake -link -all     aVendor aCategory aProject aPlatform aVersion   |
+|     The -all option links all aVendor category files to aProject category   |
+|                                                                             |
+|   ConfigMake -file aReqFile aVendor aCategory                               |
+|     Create aVendor aReqFile or if the file exists edit aReqFile             |
+|                                                                             |
+|   ConfigMake -file /path/aReqFile aCategory                                 |
+|     Create /path/aReqFile or if the file exists edit /path/aReqFile         |
+|                                                                             |
+|   ConfigMake -show aReqFile aVendor aCategory                               |
+|     Show contents of aReqFile file in aVendor ACategory                     |
+|                                                                             |
++-----------------------------------------------------------------------------+

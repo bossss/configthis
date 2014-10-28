@@ -1,0 +1,706 @@
+<html>
+  <head>
+    <title></title>
+    <style>body,h1,h2,ol,ul,p,li {font-family: arial, sans serif;margin-top: 5px;background: #EEE8AA ; color: #800020 ;}</style>
+  </head>
+
+  <body>
+    <div style="border:solid black 1px;padding:10px;text-align:center"><p>bossss.org</p></div>
+
+    <h1>ConfigMake and ConfigThis</h1>
+
+    <h2>One-line Explanation</h2>
+
+    <p>
+      Manage and execute Linux testing and reporting programs through these <I>bash</I> shell scripts
+      employing a directory structure containing a symbolic <i>link</i> to each executable <I>file</I>.
+    </p>
+
+    <h2>Two-line Explanation</h2>
+
+    <p>
+      These <I>bash</I> shell scripts are intended to iteratively load executable <I>files</I>
+      via symbolic <i>links</i> and <I>echo</I> output to a log file for later review.
+      These <I>bash</I> shell scripts rely on a directory structure intended to group testing and reporting
+      executable <I>files</I> by <I>project</I>, target <I>platform</I>,
+      and <I>version</I>.
+    </p>
+
+    <h2>Execution cycle</h2>
+
+    <ol>
+      <li><i>ConfigMake</i>
+        <ol>
+          <li><i>ConfigMake</i> - create vendor / category directories</li>
+
+          <li><i>ConfigMake</i> - create executable <i>files</i></li>
+
+          <li><i>ConfigMake</i> - create project / platform _ version directories</li>
+
+          <li><i>ConfigMake</i> - create project <i>links</i></li>
+
+        </ol>
+      </li>
+
+      <li><i>ConfigThis</i>
+        <ol>
+          <li><i>ConfigThis</i> - self check - finds specified directories and related files</li>
+
+          <li><i>ConfigThis</i> - load each <i>link</i></li>
+
+          <li><i>ConfigThis</i> - redirect output to a project / platform _ version log file</li>
+
+          <li><i>ConfigThis</i> - check the exit code and generate a <I>stop</I> file upon failure</li>
+
+          <li>Review the log file and update target software and systems</li>
+
+          <li>Repeat</li>
+
+        </ol>
+      </li>
+    </ol>
+
+    <p><i>ConfigThis</i> will continue loading each <I>link</I> in each <I>category</I>. If a <I>link</I> returns a non-zero value (i.e. it <I>terminates</I> abnormally) then <I>ConfigThis</I>
+      creates a <I>stop</I> file in the current project / platform _ version / <I>category</I> directory.
+    </p>
+
+    <p>If all <I>links</I> complete without abnormal termination then <I>ConfigThis</I> creates a <I>last.stop</I> file in the current <I>category</I> directory then continues to
+      the next <I>category</I> directory.
+    </p>
+
+    <p>You may now review the <i>ConfigThis</i> log file and  make adjustments to the target software and systems.</p>
+
+    <p><i>ConfigThis</i> again. If a <I>stop</I> file exists then start with the indicated <i>link</i> in that category, or if a <I>last stop</I> file exists then skip the category.
+      You may execute <i>ConfigThis</i> with the <tt>-nostop</tt> option causing <I>ConfigThis</I> to
+      delete the <I>stop</I> files and then load all <i>links</i> per <I>category</I> in all <I>categories</I>.
+    </p>
+
+    <h2>Installation</h2>
+
+    <ol>
+      <li>Download the five <i>ConfigMake</i> and <i>ConfigThis</i> files (e.g. to <tt>/home/loginID/Downloads</tt>)
+
+        <ol>
+          <li><tt>ConfigMake</tt> (executable script)</li>
+          <li><tt>ConfigThis</tt> (executable script)</li>
+          <li><tt>ConfigMake.txt</tt> ( <i>ConfigMake -help</i> )</li>
+          <li><tt>ConfigThis.txt</tt> ( <i>ConfigThis -help</i> )</li>
+          <li><tt>ConfigThis.html</tt> ( you are reading it now )</li>
+
+        </ol>
+      </li>
+
+      <li>Enable execution of <i>ConfigMake</i>
+
+        <ul>
+          <li><tt>cd /home/loginID/Downloads</tt> (substitute the appropriate <I>loginID</I>)</li>
+          <li><tt>chmod u+x ./ConfigMake</tt></li>
+
+        </ul>
+      </li>
+
+    </ol>
+
+    <h2>Description</h2>
+
+    <ul>
+      <li><I>ConfigMake</I> is a simple and elegant Linux <I>bash</I> command line tool used to create
+      and populate the project and vendor directory structures containing
+      executable <I>files</I> that perform tests and generate reports.
+      </li>
+
+      <li><I>ConfigThis</I> is a simple and elegant Linux <I>bash</I> command line tool employing a directory-based
+        and file-based template to load executable <I>files</I> via symbolic <I>links</I> that perform tests and generate reports.
+      </li>
+
+      <li><I>ConfigThis</I> is not designed to reinvent the wheel. It is understood that dozens of
+        <I>exploit frameworks</I>, <I>hardening frameworks</I>, and <I>unit testing frameworks</I> are in use
+        today. And, they do not talk to each other...
+        You may leverage these tools within the <I>ConfigThis</I> template system
+        <ul>
+          <li>Download and configure scripts for use in <I>ConfigThis</I></li>
+          <li>Create <i>links</i> to exploit frameworks that have API's (e.g. Metasploit) to execute
+              individual tests, one test per <i>link</i> </li>
+          <li>Create <i>links</i> to unit testing frameworks to execute individual unit
+              tests, one test per <i>link</i> or one application per <i>link</i> </li>
+        </ul>
+      </li>
+
+      <li><I>ConfigThis</I> loads vendor-provided or user-coded stand-alone <I>microservice</I>-styled
+        executable <i>files</i> (e.g. bash scripts, PHP, Python, Ruby, Lisp, C/C++, etc.) via <i>links</i> (i.e. <tt>ln</tt>), each
+        executable <i>file</i> performs a test or procedure and generates corresponding <I>echo</I>-like statement(s). <I>echo</I> output is redirected
+        to a log file, for later analysis.
+      </li>
+
+      <li><I>ConfigThis</I> directories and files are kept separate from target application, utility,
+        and/or project files - there is one set of project directories containing <I>links</I>
+        (i.e. <tt>ln</tt>) to another set of vendor directories and user-specified
+        directories containing executable <I>files</I>
+      </li>
+
+      <li><I>ConfigThis</I> loads only those <i>links</i> found in the specified <I>project</I> /
+        <I>platform</I> _ <I>version</I> directory - loaded in a sort order intrinsically determined by
+        <I>category</I> directory names and <i>link</i> names (i.e. no metadata files).
+      </li>
+
+      <li><I>ConfigThis</I> vendor executable <I>files</I> may be maintained as needed without
+      adversely impacting project tests or reports as long as vendor <I>category</I> directories and
+      executable <i>files</i> are <I>not</I> deleted nor renamed. New executable <i>files</i>
+      added to vendor directories will <i>not</i> be employed until
+      project <i>links</i> are created to them.
+      </li>
+
+    </ul>
+
+    <h2><I>ConfigMake</I> Usage</h2>
+
+    <ol>
+      <li>Prerequisites
+        <ul>
+          <li>Presumes installation</li>
+          <li>Presumes that directory <tt>/home/loginID</tt> exists (substitute the appropriate <I>loginID</I>)</li>
+          <li>Presumes that directory <tt>/home/loginID/Downloads</tt> exists</li>
+        </ul>
+      </li>
+
+      <li>Change current working directory
+        <ul>
+          <li><tt>cd /home/loginID/Downloads</tt> </li>
+
+        </ul>
+      </li>
+
+      <li>Execute <I>ConfigMake</I> to create template directories
+        <ul>
+          <li><tt>./ConfigMake -this /home/loginID</tt></li>
+
+        </ul>
+      </li>
+
+      <li>Change current working directory
+        <ul>
+          <li><tt>cd /home/loginID</tt></li>
+
+        </ul>
+      </li>
+
+      <li>Execute <I>ConfigMake</I> to display the contents of the help file <tt>/usr/share/ConfigMake.txt</tt>
+        <ul>
+          <li><tt>ConfigMake</tt>
+            <ul><li>This presumes execution from <tt>/usr/local/bin</tt></li></ul>
+          </li>
+
+        </ul>
+      </li>
+
+      <li>Execute <I>ConfigMake</I> to display the contents of the conf file <tt>/etc/ConfigThis/ConfigThis.conf</tt>
+        <ul>
+          <li><tt>ConfigMake -conf</tt>
+          </li>
+
+        </ul>
+      </li>
+
+      <li>Execute <I>ConfigMake</I> to list <i>vendor</i> directories
+        <ul>
+          <li><tt>ConfigMake -vendors</tt>
+
+            <ul>
+              <li><tt>./ConfigThis/vendor/aVendor/</tt></li>
+              <li><tt>./ConfigThis/vendor/loginID/</tt></li>
+              <li><tt>./ConfigThis/vendor/bossss/</tt></li>
+
+            </ul>
+          </li>
+
+        </ul>
+      </li>
+
+      <li>Execute <I>ConfigMake</I> to create <i>vendor</i> directories
+        <ul>
+          <li><tt>ConfigMake -vendor aVendor</tt>
+
+            <ul>
+              <li><tt>./ConfigThis/vendor/aVendor/config_1000_os/</tt></li>
+              <li><tt>./ConfigThis/vendor/aVendor/config_2000_ip/</tt></li>
+              <li><tt>./ConfigThis/vendor/aVendor/config_3000_usr/</tt></li>
+
+            </ul>
+          </li>
+
+          <li>If the vendor directory exists then the executable <i>files</i> stored therein are listed</li>
+        </ul>
+      </li>
+
+      <li>Execute <I>ConfigMake</I> to list all vendor-supplied executable <i>files</i>
+        <ul>
+          <li><tt>ConfigMake -files aVendor | less</tt></li>
+
+          <li><tt>ConfigMake -files aVendor aCategory | less</tt></li>
+
+            <ul>
+              <li>List all executable <i>files</i> for one <I>vendor</I> located in the <I>ConfigThis</I> home directory as specified in the <I>ConfigThis.conf</I> file.
+                <ul><li><tt>/usr/src/ConfigThis/vendor/aVendor/aCategory1/aSourceFile3.sh</tt></li></ul></li>
+                <ul><li><tt>/usr/src/ConfigThis/vendor/aVendor/aCategory2/aSourceFile4.sh</tt></li></ul></li>
+              </li>
+
+              <li>List all executable <i>files</i> for one <I>vendor</I> in one <I>category</I> located in the <I>ConfigThis</I> home directory as specified in the <I>ConfigThis.conf</I> file.
+                <ul><li><tt>/usr/src/ConfigThis/vendor/aVendor/aCategory/aSourceFile1.sh</tt></li></ul></li>
+                <ul><li><tt>/usr/src/ConfigThis/vendor/aVendor/aCategory/aSourceFile2.sh</tt></li></ul></li>
+              </li>
+
+              <li>The <I>| less</I> option enables paging of screen output.
+              </li>
+            </ul>
+
+          </li>
+
+        </ul>
+
+      </li>
+
+      <li>Execute <I>ConfigMake</I> to work with downloaded vendor-supplied executable <i>files</i> or create
+        your own executable <i>files</i>
+        <ul>
+          <li><tt>ConfigMake -file aSourceFile.sh aVendor aCategory</tt></li>
+
+          <li><tt>ConfigMake -file /usr/local/bin/aSourceFile.sh</tt>
+
+            <ul>
+              <li>Create an executable <i>file</i> in the <I>ConfigThis</I> home directory as specified in the <I>ConfigThis.conf</I> file.
+                <ul><li><tt>/usr/src/ConfigThis/vendor/aVendor/aCategory/aSourceFile.sh</tt></li></ul></li>
+              </li>
+
+              <li>Else, create an executable <i>file</i> in the current working directory if it contains a <I>ConfigThis</I> directory.
+                <ul><li><tt>./ConfigThis/vendor/aVendor/aCategory/aSourceFile.sh</tt></li></ul>
+              </li>
+
+              <li>Else, create an executable <i>file</i> in the directory specified and the <I>aVendor</I> and <I>aCategory</I> parameters are ignored
+                <ul><li><tt>/usr/local/bin/aSourceFile.sh</tt></li></ul>
+              </li>
+
+              <li>If the file exists then the system presents a prompt to edit the file using the default editor (i.e. vim), respond <I>Y</I> or <I>N</I>
+              </li>
+
+              <li><b>This is where all of the real work gets done</b>
+                <ul>
+                  <li>A library of 500+ executable <i>files</i> is available on-line</li>
+
+                  <li>There is nothing special about each executable <i>file</i> other than it must work without failure (or at least trap errors)</li>
+
+                  <li>The contents of each executable <i>file</i> may be compiled C, C++, or interpretive PERL, Python, PHP, or may be a shell script. No limits imposed.</li>
+
+                </ul>
+              </li>
+
+            </ul>
+
+          </li>
+        </ul>
+
+      <li>Execute <I>ConfigMake</I> to show the contents of an executable script <i>file</i> (vs binary files)
+        <ul>
+          <li><tt>ConfigMake -show aSourceFile.sh aVendor aCategory</tt></li>
+
+          <li><tt>ConfigMake -show /usr/local/bin/aSourceFile.sh</tt>
+
+            <ul>
+              <li>Show the contents of an executable script <i>file</i> located in the <I>ConfigThis</I> home directory as specified in the <I>ConfigThis.conf</I> file.
+                <ul><li><tt>/usr/src/ConfigThis/vendor/aVendor/aCategory/aSourceFile.sh</tt></li></ul></li>
+              </li>
+
+              <li>Else, show the contents of an executable script <i>file</i> located in the current working directory if it contains a <I>ConfigThis</I> directory.
+                <ul><li><tt>./ConfigThis/vendor/aVendor/aCategory/aSourceFile.sh</tt></li></ul>
+              </li>
+
+              <li>Else, show the contents of an executable script <i>file</i> located in the directory specified and the <I>aVendor</I> and <I>aCategory</I> parameters are ignored
+                <ul><li><tt>/usr/local/bin/aSourceFile.sh</tt></li></ul>
+              </li>
+
+              <li>The system presents a prompt to edit the file using the default editor (i.e. vim), respond <I>Y</I> or <I>N</I>
+              </li>
+
+            </ul>
+
+          </li>
+
+        </ul>
+
+      </li>
+
+      <li>Execute <I>ConfigMake</I> to list <i>project</i> directories
+        <ul>
+          <li><tt>ConfigMake -projects</tt>
+            <ul>
+              <li><tt>./ConfigThis/aProject/</tt></li>
+              <li><tt>./ConfigThis/bProject/</tt></li>
+              <li><tt>./ConfigThis/cProject/</tt></li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+
+      <li>Execute <I>ConfigMake</I> to create <i>project</i> directories (pick one or more of the following)
+        <ul>
+          <li><tt>ConfigMake -default</tt>
+            <ul>
+              <li><tt>./ConfigThis/aProject/dev_01/config_1000_os/ </tt></li>
+
+              <li><tt>./ConfigThis/aProject/test_01/config_1000_os/</tt></li>
+
+              <li><tt>./ConfigThis/aProject/prod_01/config_1000_os/</tt>
+
+                <ul>
+                  <li>Creates default directories in <tt>./ConfigThis/aProject/</tt>, including three <I>platform _ version</I> directories</li>
+
+                  <li>The login ID <I>owner</I> and default <I>group</I> are retained for all directories</li>
+
+                </ul>
+              </li>
+            </ul>
+
+          </li>
+
+          <li><tt>ConfigMake -project aProject aPlatform aVersion</tt></li>
+
+          <li><tt>ConfigMake -project aProject aPlatform aVersion aGroup</tt></li>
+
+          <li><tt>ConfigMake -project aProject aPlatform aVersion aGroup aOwner</tt>
+            <ul>
+              <li><tt>./ConfigThis/aProject/aPlatform_aVersion/config_1000_os/</tt></li>
+              <li><tt>./ConfigThis/aProject/aPlatform_aVersion/config_2000_tcp/</tt></li>
+              <li><tt>./ConfigThis/aProject/aPlatform_aVersion/config_3000_usr/</tt>
+
+                <ul>
+                  <li>aGroup is optional. If aGroup is provided <I>ConfigThis</I> executes <tt>chown aOwner:aGroup</tt> on all directories</li>
+
+                  <li>aOwner is optional. aOwner defaults to the current login ID (i.e. <tt>whoami</tt>)</li>
+                </ul>
+              </li>
+            </ul>
+
+          </li>
+
+        </ul>
+      </li>
+
+      <li>Execute <I>ConfigMake</I> to list all Project <i>links</i>
+        <ul>
+          <li><tt>ConfigMake -links aProject | less</tt></li>
+
+          <li><tt>ConfigMake -links aProject aPlatform aVersion | less</tt></li>
+
+            <ul>
+              <li>List all <i>links</i> for one <I>Project</I> located in the <I>ConfigThis</I> home directory as specified in the <I>ConfigThis.conf</I> file.
+                <ul><li><tt>/usr/src/ConfigThis/aProject/aPlatform_aVersion/aCategory1/aLink3.sh</tt></li></ul></li>
+                <ul><li><tt>/usr/src/ConfigThis/aProject/aPlatform_aVersion/aCategory2/aLink4.sh</tt></li></ul></li>
+              </li>
+
+              <li>List all <i>links</i> for one <I>Project</I> in one <I>category</I> located in the <I>ConfigThis</I> home directory as specified in the <I>ConfigThis.conf</I> file.
+                <ul><li><tt>/usr/src/ConfigThis/aProject/aPlatform_aVersion/aCategory1/aLink5.sh</tt></li></ul></li>
+                <ul><li><tt>/usr/src/ConfigThis/aProject/aPlatform_aVersion/aCategory1/aLink6.sh</tt></li></ul></li>
+              </li>
+
+              <li>The <I>| less</I> option enables paging of screen output.
+              </li>
+            </ul>
+
+          </li>
+
+        </ul>
+
+      </li>
+
+      <li>Execute <I>ConfigMake</I> to create a <i>link</i> from an executable <i>file</i> to a project
+
+        <ul>
+          <li><tt>ConfigMake -link /usr/local/bin/aSourceFile.sh aCategory aProject aPlatform aVersion</tt></li>
+
+          <li><tt>ConfigMake -link aSourceFile.sh aVendor aCategory aProject aPlatform aVersion</tt></li>
+
+          <li><tt>ConfigMake -link -all           aVendor aCategory aProject aPlatform aVersion</tt>
+            <ul>
+              <li><I>aSourceFile.sh</I> is found in the same manner as described under <I>-file</I></li>
+
+              <li>Create a <i>link</i> in the current working directory if it contains a <I>ConfigThis</I> directory.
+                <ul><li><tt>./ConfigThis/aProject/aPlatform_aVersion/aCategory/aSourceFileLink</tt></li></ul>
+              </li>
+
+              <li>Else, create a <i>link</i> in the <I>ConfigThis</I> home directory as specified in the <I>ConfigThis.conf</I> file.
+                <ul><li><tt>/usr/src/ConfigThis/aProject/aPlatform_aVersion/aCategory/aSourceFileLink</tt></li></ul>
+              </li>
+
+              <li>If the <i>link</i> exists then it is listed</li>
+
+              <li>The <tt>-all</tt> option creates <i>links</i> to all vendor / category executable <i>files</i> .</li>
+
+              <li>Links may be created to your other executable <i>files</i> . No need to move or rename files.</li>
+
+              <li>Files are loaded in <I>alpha</I> order by <I>category</I> directory name and  <I>link</I> name (i.e. vs <I>executable</I> file name)</li>
+
+            </ul>
+          </li>
+
+        </ul>
+      </li>
+
+    </ol>
+
+    <h2><I>ConfigThis</I> Usage</h2>
+
+    <ol>
+      <li>Prerequisites
+        <ul>
+          <li>Presumes prior execution of <tt>ConfigMake -this</tt></li>
+          <li>Presumes prior execution of <tt>ConfigMake -project...</tt></li>
+          <li>Presumes that directory <tt>/home/loginID</tt> exists (substitute the appropriate <I>loginID</I>)</li>
+          <li>Presumes that directory <tt>/home/loginID/ConfigThis/aProject/aPlatform_aVersion</tt> exists</li>
+        </ul>
+      </li>
+
+      <li>Change current working directory
+        <ul>
+          <li><tt>cd /home/loginID</tt></li>
+
+        </ul>
+      </li>
+
+      <li>Execute <I>ConfigThis</I> to display the contents of the help file <tt>/usr/share/ConfigThis.txt</tt>
+        <ul>
+          <li><tt>ConfigThis</tt>
+            <ul><li>This presumes execution from <tt>/usr/local/bin</tt></li></ul>
+          </li>
+
+        </ul>
+      </li>
+
+      <li>Execute <I>ConfigThis</I> to display the contents of the conf file <tt>/etc/ConfigThis/ConfigThis.conf</tt>
+        <ul>
+          <li><tt>ConfigThis -conf</tt>
+          </li>
+
+        </ul>
+      </li>
+
+      <li>Execute <I>ConfigThis</I> to run tests and/or reports for a specified project
+        <ul>
+          <li><tt>ConfigThis aProject aPlatform aVersion</tt>
+          <li><tt>ConfigThis aProject aPlatform aVersion aCategory</tt>
+          <li><tt>ConfigThis aProject aPlatform aVersion aCategory aLink</tt>
+
+            <ul>
+              <li>Each <i>link</i> is loaded in turn with output written to
+                <ul><li> <tt>/home/loginID/ConfigThis/aProject/aPlatform_aVersion/ConfigThis-aDate-aTime.log</tt></li></ul></li>
+
+              <li>If a <i>link</i> returns a non-zero number then a <I>stop</I> file is written to the corresponding <I>category</I> directory
+                <ul><li> <tt>/home/loginID/ConfigThis/aProject/aPlatform_aVersion/config_1000_os/config_1000_os_kernal_01.stop</tt></li></ul>
+              </li>
+
+              <li>Executing <I>ConfigThis</I> without any defined <i>links</i> will cause a non-fatal error per <I>category</I> directory</li>
+              <li>Executing <I>ConfigThis</I> when calling a corrupt or non-working <i>link</i> causes the system to create a <I>stop</I> file in the corresponding <I>category</I> directory</li>
+              <li>Executing <I>ConfigThis</I> with <tt>aCategory</tt> specified loads only <i>links</i> from aCategory</li>
+              <li>Executing <I>ConfigThis</I> with <tt>aLink</tt> specified loads only one <i>link</i> </li>
+            </ul>
+          </li>
+          <li><tt>ConfigThis aProject aPlatform aVersion -nostop</tt>
+
+            <ul>
+              <li><I>Stop</I> files control the flow of execution within a <I>category</I> directory</li>
+              <li>Executing <I>ConfigThis</I> when a <tt>category/*.stop</tt> file exists starts execution at the <I>stopped</I> link</li>
+              <li>Executing <I>ConfigThis</I> when a <tt>category/last.stop</tt> file exists skips the <I>category</I> and continues to the next <i>category</i></li>
+              <li>Executing <I>ConfigThis</I> with <tt>-nostop</tt> ingnores <I>stop</I> files and loads all <i>links</i> in all <I>categories</I></li>
+            </ul>
+          </li>
+
+        </ul>
+      </li>
+
+      <li>Execute <I>ConfigThis</I> to list all logs</tt>
+        <ul>
+          <li><tt>ConfigThis -logs aProject aPlatform aVersion</tt>
+          </li>
+
+        </ul>
+      </li>
+
+      <li>Execute <I>ConfigThis</I> edit a log</tt>
+        <ul>
+          <li><tt>ConfigThis -log</tt>
+          <li><tt>ConfigThis -log aProject aPlatform aVersion</tt>
+            <ul><li>Defaults to the last log created by <I>ConfigThis</I></li></ul>
+          </li>
+
+        </ul>
+      </li>
+
+      </ul>
+      </li>
+
+    </ol>
+
+    <h2>Design</h2>
+
+    <ol>
+      <li>This is a sample <I>ConfigThis</I> directory structure with all files:
+        <ul>
+          <li><tt>/usr/local/src/webroot/index.html</tt></li>
+          <li><tt>/usr/local/bin/ConfigMake</tt></li>
+          <li><tt>/usr/local/bin/ConfigThis</tt></li>
+          <li><tt>/usr/local/share/ConfigThis/ConfigMake.txt</tt></li>
+          <li><tt>/usr/local/share/ConfigThis/ConfigThis.txt</tt></li>
+          <li><tt>/usr/local/share/ConfigThis/ConfigThis.html</tt></li>
+          <li><tt>/etc/ConfigThis/ConfigThis.conf</tt></li>
+          <li><tt>/usr/local/src/ConfigThis/vendor/bossss/README</tt></li>
+          <li><tt>/usr/local/src/ConfigThis/vendor/bossss/LICENSE</tt></li>
+          <li><tt>/usr/local/src/ConfigThis/vendor/bossss/config_1000_os/conf_1000_os_*.*</tt></li>
+          <li><tt>/usr/local/src/ConfigThis/vendor/currentuserid/config_1000_os/conf_1000_os_*.*</tt></li>
+          <li><tt>/usr/local/src/ConfigThis/MyProject/dev_01/ConfigThis-20000101-235959.log</tt></li>
+          <li><tt>/usr/local/src/ConfigThis/MyProject/dev_01/config_1000_os/link-conf_1000_os_*</tt></li>
+          <li><tt>/usr/local/src/ConfigThis/MyProject/dev_01/config_1000_os/link-conf_1000_os_*.stop</tt></li>
+          <li><tt>/usr/local/src/ConfigThis/MyProject/test_01/config_1000_os/link-conf_1000_os_*</tt></li>
+          <li><tt>/usr/local/src/ConfigThis/MyProject/prod_01/config_1000_os/link-conf_1000_os_*</tt></li>
+          <li><tt>/usr/local/src/ConfigThis/AnotherProject/dev_01/config_1000_os/link-conf_1000_os_*</tt></li>
+          <li><tt>/usr/local/src/ConfigThis/AnotherProject/dev_01/config_1000_os/last.stop</tt></li>
+          <li><tt>/usr/local/src/ConfigThis/AnotherProject/dev_02/config_1000_os/link-conf_1000_os_*</tt></li>
+
+        </ul>
+
+      </li>
+
+      <li>Once executable <i>files</i> are collected and <i>links</i> are created the final structure includes:
+        <ul>
+          <li>One or more <i>vendor</i> directories (e.g. aVendor) containing <i>category</i> directories
+            <ul><li><tt>./ConfigThis/vendor/aVendor/config_1000_os/</tt></li></ul>
+          </li>
+
+          <li>One executable <i>file</i> (chmod u+x) per test or report program
+            <ul><li><tt>./ConfigThis/vendor/aVendor/config_1000_os/config_1000_os_01_kernal.sh</tt></li></ul>
+          </li>
+
+          <li>One or more <i>project</i> directories (e.g. MyProject)
+            corresponding to project, utility, and/or web application source code
+            <ul><li><tt>./ConfigThis/aProject/</tt></li></ul>
+          </li>
+
+          <li>One project <i>platform</i> and <i>version</i> directory per target
+            platform (e.g. dev_01)
+            <ul><li><tt>./ConfigThis/aProject/aPlatform_aVersion/</tt></li></ul>
+          </li>
+
+          <li>One project platform version <i>config_N000_</i> directory per <I>category</I>.
+            <ul><li><tt>./ConfigThis/aProject/aPlatform_aVersion/config_1000_os/</tt></li></ul>
+          </li>
+
+          <li>One <i>link</i> per vendor executable <i>file</i>
+            <ul><li><tt>./ConfigThis/aProject/aPlatform_aVersion/config_1000_os/link-config_1000_os_01_kernal.sh </tt></li></ul>
+          </li>
+
+        </ul>
+
+      </li>
+
+      <li>Naming Conventions:
+        <ul>
+          <li>All <I>platform_version</I> directories contain an underscore character <B>_</B> between <I>platform</I> and <I>version</I>
+          </li>
+
+          <li>There is no significance to the <I>category</I> directory names and <I>link</I>  names except as it pertains to the order of execution
+          </li>
+
+          <li><I>Category</I> directories are preset to
+            <I>1000 os</I>,  <I>2000 ip</I>,  <I>3000 usr</I>,
+            <I>4000 vm</I>,  <I>5000 dev</I>, <I>6000 db</I>,
+            <I>7000 app</I>, <I>8000 mon</I> (monitoring and IDS), <I>9000 bak (backup)</I>
+            <ul><li><tt>./ConfigThis/MyProject/dev_01/config_1000_os/</tt></li></ul>
+          </li>
+
+          <li>Link names start with <I>link-</I> then the <I>category</I> directory name, followed by user specified text
+            <ul><li><tt>./ConfigThis/MyProject/dev_01/config_1000_os/link-config_1000_os_1233_kernal.sh</tt></li></ul>
+          </li>
+
+        </ul>
+
+      </li>
+
+    </ol>
+
+    <h2>Management</h2>
+
+    <ul>
+      <li><I>ConfigThis</I> platform _ versions pertain to configurations and do not necessarily
+        correspond to applications, utilities, and/or project versioning (e.g. MyProject v1.32.14,
+        <I>ConfigThis</I> version dev_03, test_02, prod_02)
+      </li>
+
+      <li><I>ConfigThis</I> order of execution is
+        determined by each <I>category</I> directory name and <i>link</i> name within
+        each project / platform _ version directory, regardless
+        of vendor executable <i>file</i> name.
+        <ul>
+          <li>A group of low level <I>category</I> directories (e.g. config_1000_os,
+            config_2000_tcp, etc.) may be copied to each new project, where most additions and
+            changes will be made to other higher level <I>category</I> directories
+            (e.g. config_7000_app ). Thus all / project / platform _ version directories will
+            contain the same set of <I>category</I> directories
+          </li>
+
+          <li>As an alternative, you may
+            group low level categories into a separate / project / platform _ version directory
+            targeting a commonly used platform with, for example, a database server and
+            multiple web applications:
+            <ul><li><tt>./ConfigThis/AllProjects/dev_low/...</tt></li></ul>
+            then group high level categories into separate / project / platform _ version directories
+            targeting each database server and/or web application:
+            <ul><li><tt>./ConfigThis/MyProject/dev_high/...</tt>
+                </li>
+                <li><tt>./ConfigThis/AnotherProject/dev_high/...</tt>
+                </li>
+            </ul>
+          </li>
+
+          <li>
+            Corresponding logs (i.e. test results) are separately maintained per project / platform_version directory.
+          </li>
+
+          <li>
+            Once low level tests have been passed you may repeat testing exclusively with the higher level tests.
+          </li>
+
+        </ul>
+      </li>
+
+      <li><I>ConfigThis</I> no harm done policy:
+        <ul>
+          <li>Executable <i>files</i> should do no harm - applicable or not</li>
+          <li>Empty project / platform _ version <I>category</I> directories are permitted.</li>
+
+          <li>Executing non-performative <i>links</i> is permitted (e.g. testing for a database
+            when no database is required). However, a <I>stop</I> file may be generated for that <I>category</I>
+            and other <I>categories</I> are subsequently loaded.
+          </li>
+
+          <li>Non-executable <i>files</i> may be stored in <I>ConfigThis</I> directories (e.g. README),
+            each will be ignored by <I>ConfigThis</I> during processing.
+          </li>
+        </ul>
+      </li>
+
+      <li>It is highly recommended that you <i>not</i> store the <I>ConfigThis</I> directories and
+        files in your webroot directory or similar source code directory. Otherwise, it is up to you
+        to decide how to manage <I>links</I> and executable <i>files</i> .
+      </li>
+
+      <li>rsync may be used to copy project / platform _ version directories of <i>links</i> or / vendor
+        executable <i>files</i> locally and remotely
+        <ul>
+          <li><tt>cd /home/loginID</tt></li>
+          <li><tt>rsync -av --filter='config*' --exclude=config_7* ./ConfigThis /tmp/ConfigThis</tt></li>
+
+        </ul>
+      </li>
+
+    </ul>
+
+  <div style="border:solid black 1px;padding:10px;text-align:center"><p>Copyright &copy; 2014 bossss.org</p></div>
+  </body>
+</html>

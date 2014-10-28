@@ -1,0 +1,35 @@
++-----------------------------------------------------------------------------+
+| PREREQUISITES:                                                              |
+|                                                                             |
+|   Presumes prior execution of ConfigMake -this                              |
+|   Presumes prior execution of ConfigMake -project...                        |
+|   Presumes directory /home/loginID exists (substitute your loginID)         |
+|   Presumes directory /home/loginID/ConfigThis/aProject/aPlatform_aVersion   |
+|                                                                             |
+| NOTES:                                                                      |
+|                                                                             |
+|   Refer to ConfigThis.html for complete documentation                       |
+|                                                                             |
+| USAGE:                                                                      |
+|                                                                             |
+|   Change current working directory (substitute your loginID)                |
+|     cd /home/loginID                                                        |
+|                                                                             |
+|   Execute ConfigThis for testing and reporting                              |
+|     ConfigThis aProject aPlatform aVersion                                  |
+|     ConfigThis aProject aPlatform aVersion aCategory                        |
+|     ConfigThis aProject aPlatform aVersion aCategory aLink                  |
+|     ConfigThis aProject aPlatform aVersion -nostop                          |
+|                                                                             |
+|   Execute ConfigThis to list logs                                           |
+|     ConfigThis -logs aProject aPlatform aVersion                            |
+|                                                                             |
+|   Execute ConfigThis to edit a log                                          |
+|     ConfigThis -log                                                         |
+|       defaults to the last log created by ConfigThis                        |
+|     ConfigThis -log aProject aPlatform aVersion                             |
+|       defaults to the last log created for the project                      |
+|                                                                             |
+|   Execute ConfigThis to show ConfigThis.conf                                |
+|     ConfigThis -conf                                                        |
++-----------------------------------------------------------------------------+

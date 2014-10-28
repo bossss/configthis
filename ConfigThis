@@ -1,0 +1,1289 @@
+#!/bin/bash
+#================================================================================
+#
+#  ConfigThis & ConfigMake - ConfigThis executable shell script
+#
+#================================================================================
+#
+#  Author:                   Barry Floyd (troybarryfloyd)
+#  Description:              Auditing tool
+#  Documentation:            README, ConfigThis.html, ConfigMake.txt, ConfigThis.txt
+#  Latest Version:           2014.10.23
+#  License:                  GNU GPL v3 2007
+#  Copyright (c) 2014 bossss.org
+#
+#================================================================================
+#
+#  Planned options:
+#  o ConfigThis -email aProject aPlatform aVersion  // send log file via email
+#
+#  Add calls to the following functions
+#  o function StartThisTimer()
+#  o function UpdateThisTimer()
+#---------------------------------------------------
+
+#---------------------------------------------------
+#
+# define functions
+#
+function MakeDateTimeString
+{
+  printf "%s" "$(date +%Y%m%d-%H%M%S.%N)"
+}
+
+function ListDirectory()
+{
+  # arg 1: directory  path name string - defaults to ./
+  # arg 2: type - either [f] file or [d] directory - defaults to [f], implies links
+  #        may be prefixed with [!] not / negate character
+  # arg 3: filter string with wild cards -
+  #        may be prefixed with [!] not / negate character
+  # arg 4: indent formatting string - any group of characters
+  # arg 5: "count" label (e.g. file, link, executable)
+  # arg 6: maxdepth defaults to 1
+  #
+  local ListThisDir="./"
+  local ListThisType="f"
+  local ListThisTypeParam="-type f"
+  local ListThisFilter=""
+  local ListThisFilterParam=""
+  local ListThisIndent=""
+  local ListThisCountLabel="file"
+  local ListThisMaxdepthParam="-maxdepth 1"
+
+  local ThisItemList=""
+  local TempString=""
+  local i=0
+  local ListThisSize=""
+  local ThisFileCount=""
+
+  # directory
+  if [[ ! -z "${1}" ]]
+  then
+    ListThisDir="${1}"
+
+  fi
+
+  # type
+  if [[ ! -z "${2}" && "${#2}" == 1 ]]
+  then
+    ListThisType="${2}"
+
+    if [[ "${ListThisType:0:1}" == "!" ]]
+    then
+      ListThisTypeParam="! -type ${ListThisType:1}"
+
+    else
+      ListThisTypeParam="-type ${ListThisType}"
+
+    fi
+
+  fi
+
+  # name filter
+  if [[ ! -z "${3}" && "${3// /}" > 0 ]]
+  then
+    ListThisFilter="${3// /}"
+
+    if [[ "${ListThisFilter:0:1}" == "!" ]]
+    then
+      ListThisFilterParam="! -name ${ListThisFilter:1}"
+
+    else
+      ListThisFilterParam="-name ${ListThisFilter}"
+
+    fi
+
+  fi
+
+  # formatting indent string
+  if [[ ! -z "${4}" && "${#4}" > 0 ]]
+  then
+    ListThisIndent="${4}"
+
+  fi
+
+  # count label
+  if [[ ! -z "${5}" && "${#5}" > 0 ]]
+  then
+    ListThisCountLabel="${5}"
+
+  fi
+
+  # find max search depth
+  if [[ ! -z "${6}" && "${#6}" > 0 ]]
+  then
+    ListThisMaxdepthParam="-maxdepth ${6}"
+
+  fi
+
+  # get list of items in directory
+  ThisItemList=$(sudo find ${ListThisDir} ${ListThisMaxdepthParam} ${ListThisTypeParam} ${ListThisFilterParam} | sort)
+
+  if [[ -n "${ThisItemList}" ]]
+  then
+    i=1
+
+    for ListThisItem in $ThisItemList
+    do
+      if [[ -L "${ListThisItem}" ]]
+      then
+        ListThisSize="[ link ]"
+
+      elif [[ "${ListThisType}" == "f" ]]
+      then
+        ListThisSize="[ $( wc -c "$ListThisItem" | awk '{print $1}' ) bytes ]"
+
+      else
+        ListThisSize="\\n${ListThisIndent}   [ has $(sudo find ${ListThisItem} -type f | wc -l) ${ListThisCountLabel}(s) ]"
+
+      fi
+
+      TempString="$( awk -v rmv="$ListThisDir" -v path="$ListThisItem" 'BEGIN{sub(rmv,"",path); print path}' )"
+      TempString="$( awk -v rmv="/" -v path="$TempString" 'BEGIN{sub(rmv,"",path); print path}' )"
+
+      if [[ "${#TempString}" -gt 1 ]]
+      then
+        ShowMessage "show" "${ListThisIndent}${i}) ${TempString} ${ListThisSize}"
+
+        i=$(($i + 1))
+
+        #REFACTOR add 'maxdepth' recursive call, calculate next depth 'ListThisIndent'
+
+      fi
+
+    done
+
+  else
+    ShowMessage "show" "-----"
+    ShowMessage "info" "----- No items found in ${ListThisDir} (list directory)"
+
+  fi
+}
+
+function GetDirectoryIn()
+{
+  # arg1: strPathFile
+  #
+  local strPath=""
+
+  if [[ ! -z "${1}" ]]
+  then
+    strPath="${1}"
+    strPath="${strPath%/*}"
+
+    printf "%s" "${strPath}"
+  fi
+}
+
+function IsWritableBy()
+{
+  # arg1: strDirectory
+  # arg2: strUserID
+  #
+  local strDirectory=""
+  local strUserID=""
+  local strGroupMember=""
+  local strDirVals=""
+
+  if [[ ! -z "${1}" ]]
+  then
+    strDirectory="${1}"
+
+    if [[ ! -z "${2}" ]]
+    then
+      strUserID="${2}"
+
+      if read -a strDirVals < <(stat -Lc "%U %G %A" "${strDirectory}" ) &&
+      (
+        (
+          [ "${strDirVals}" == "${strUserID}" ] &&
+          [ "${strDirVals[2]:2:1}" == "w" ]
+        ) ||
+          ( [ "${strDirVals[2]:8:1}" == "w" ] ) ||
+        (
+          [ "${strDirVals[2]:5:1}" == "w" ] &&
+          (
+            strGroupMember=($(groups $strUserID)) &&
+            [[ "${strGroupMember[*]:2}" =~ ^(.* |)"${strDirVals[1]}"( .*|)$ ]]
+          )
+        )
+      )
+      then
+        printf "%s" "0"
+
+      else
+        printf "%s" "1"
+
+      fi
+
+    else
+      printf "%s" "1"
+
+    fi
+
+  else
+    printf "%s" "1"
+
+  fi
+}
+
+function FormatTime()
+{
+  # arg 1: time
+  #
+  local dt="${1}"
+
+  ds=$(( dt % 60 ))
+  dm=$(( (dt / 60) % 60 ))
+  dh=$(( dt / 3600 ))
+
+  printf '%02d:%02d:%02d' $dh $dm $ds
+}
+
+function UseTimer()
+{
+  # arg 1: start time [optional]
+  #
+  local stime=""
+  local etime=""
+  local dt=""
+
+  if [[ $# -eq 0 ]]; then
+    printf "%s" "$(date '+%s.%N')"
+
+  else
+    stime="${1}"
+
+    etime=$(date '+%s.%N')
+
+    if [[ -z "${stime}" ]]; then stime="${etime}"; fi
+
+    dt=$(( etime - stime ))
+
+    df="$(FormatTime ${dt})"
+
+    printf "%s" $df
+
+  fi
+}
+
+function StartThisTimer()
+{
+  # no parameters passed in
+  #
+  local strLogStart="$(UseTimer)"
+
+  printf "%s" "${strLogStart}"
+}
+
+function UpdateThisTimer()
+{
+  # arg 1: start time
+  #
+  local strLogElapsed="$(UseTimer ${1})"
+
+  printf "%s" "${strLogElapsed}"
+}
+
+function GetCategoryPathFromCode()
+{
+  # arg 1: category code ####
+  #
+  local strCategoryPath=""
+
+  if [[ ! -z "${1}" ]]
+  then
+    if [[ "${#1}" = 4 ]]
+    then
+      case "${1}" in
+        1000) strCategoryPath="config_1000_os"
+              ;;
+        2000) strCategoryPath="config_2000_ip"
+              ;;
+        3000) strCategoryPath="config_3000_usr"
+              ;;
+        4000) strCategoryPath="config_4000_vm"
+              ;;
+        5000) strCategoryPath="config_5000_dev"
+              ;;
+        6000) strCategoryPath="config_6000_db"
+              ;;
+        7000) strCategoryPath="config_7000_app"
+              ;;
+        8000) strCategoryPath="config_8000_mon"
+              ;;
+        9000) strCategoryPath="config_9000_bak"
+              ;;
+           *) ShowMessage "show" "-----"
+              ShowMessage "info" "${1} is not a valid category number"
+              ;;
+      esac
+
+    else
+      ShowMessage "show" "-----"
+      ShowMessage "info" "${1} is not a valid category number"
+
+    fi
+
+  else
+    ShowMessage "show" "-----"
+    ShowMessage "info" "${1} is not a valid category number"
+
+  fi
+
+  printf "%s" "${strCategoryPath}"
+}
+
+function ShowMessage
+{
+  # arg 1: level - err, show, info, debug
+  # arg 2: message string
+  # arg 3: long (message) or NULL
+  #
+  local strLevel=""
+  local strMessage=""
+
+  if [[ ! -z "${1}" && "${1}" == "err" ]]
+  then
+    strLevel="err"
+
+  else
+    if [[ ! -z "${1}" && "${1}" == "show" ]]
+    then
+      strLevel="show"
+
+    else
+      if [[ ! -z "${1}" && "${1}" == "debug" ]]
+      then
+        strLevel="debug"
+
+      else
+        strLevel="info"
+
+      fi
+
+    fi
+
+  fi
+
+  if [[ ! -z "${3}" && "${3}" == "long" ]]
+  then
+    if [[ ! -z "${2}" ]]
+    then
+      strMessage=" -- ConfigThis -- ${2}"
+
+    else
+      strMessage=" -- ConfigThis -- ${FUNCNAME[ 1 ]}"
+
+    fi
+
+    strMessage="$(MakeDateTimeString) --${strLevel} --id $$  --msg ${strMessage}"
+
+  else
+    if [[ "${strLevel}" == "debug" ]]
+    then
+      strMessage="$(MakeDateTimeString) --${strLevel} --id $$  --msg ${strMessage}"
+
+    else
+      strMessage="${2}"
+
+    fi
+
+  fi
+
+  echo -e "${strMessage}" 2>/dev/null
+
+  if [[ "${strLevel}" != "show" && -n "${ConfigThis_log}" && "${#ConfigThis_log}" -gt 0 ]]
+  then
+    echo -e "${strMessage}" 2>/dev/null >>"${ConfigThis_log}"
+
+  fi
+
+}
+
+function LoadConfValues
+{
+  # no parameters passed in
+  #
+
+  local strThisBinPath="${0}"
+  ConfigThis_bin="$( awk -v rmv="/ConfigThis" -v path="$strThisBinPath" 'BEGIN{sub(rmv,"",path); print path}' )"
+
+  if [[ ! -f "${strThisBinPath}.conf" ]]
+  then
+    if [[ ! -f "/etc/ConfigThis/ConfigThis.conf" ]]
+    then
+      strPathConf="${ConfigThis_bin}"
+      ConfigThis_share="${ConfigThis_bin}"
+
+    else
+      strPathConf="/etc/ConfigThis"
+      ConfigThis_share="/usr/share/ConfigThis"
+
+    fi
+
+  else
+    strPathConf="${ConfigThis_bin}"
+    ConfigThis_share="${ConfigThis_bin}"
+
+  fi
+
+  ConfigThis_conf="${strPathConf}/ConfigThis.conf"
+
+  if [[ ! -f "${ConfigThis_conf}" ]]
+  then
+    ConfigThis_conf="ConfigThis.conf"
+
+    if [[ ! -f "${ConfigThis_conf}" ]]
+    then
+      export ConfigThis_bin="${ConfigThis_bin}"
+      export ConfigThis_editor="/usr/bin/vim"
+      export ConfigThis_owner="$(whoami)"
+      export ConfigThis_group="$(getent group ${ConfigThis_owner}|awk 'BEGIN {FS=":"}{print $1}')"
+      export ConfigThis_home="~/"
+      export ConfigThis_root="ConfigThis"
+      export ConfigThis_projects="${ConfigThis_root}"
+      export ConfigThis_vendors="${ConfigThis_root}/vendor"
+      export ConfigThis_reportto="${ConfigThis_owner}@localhost"
+      export ConfigThis_remoteto=""
+      export ConfigThis_remoteexclude=""
+      export ConfigThis_remoteport=""
+
+    else
+      . "${ConfigThis_conf}"       # source / eval the contents of *.conf
+
+    fi
+
+  else
+    . "${ConfigThis_conf}"         # source / eval the contents of *.conf
+
+  fi
+
+  #
+  # defer setting ConfigThis_log until after parameters have been processed
+  # no log needed if option -help or option NULL
+  #
+}
+
+function CheckReturnCode
+{
+  # arg 1: return code of last executed command, script, function, etc.
+  # arg 2: path and file name of last executed script
+  #
+  local ThisReturnCode=0
+  local ThisPathFile=""
+
+  if [[ ! -z "${1}" ]]
+  then
+    ThisReturnCode="${1}"
+
+    if [[ ! -z "${2}" ]]
+    then
+      ThisPathFile="${2}"
+
+      if [[ "${ThisReturnCode}" != "0" ]]
+      then
+        ShowMessage "info" "----- Error:"
+        ShowMessage "info" "-----   ${ThisReturnCode}"
+
+        if [[ $(IsWritableBy $(GetDirectoryIn "${ThisPathFile}.stop") ${ConfigThis_owner}) ]]
+        then
+          ShowMessage "info" "----- Stop:"
+          ShowMessage "info" "-----   ${ThisPathFile}.stop"
+
+          echo -e "$(MakeDateTimeString) - [lnk] ${ThisPathFile}" 2>/dev/null >"${ThisPathFile}.stop"
+          echo -e "$(MakeDateTimeString) - [src] $(readlink -e -v ${ThisPathFile})" 2>/dev/null >>"${ThisPathFile}.stop"
+
+        else
+          ShowMessage "info" "-----   failed to write to ${ThisPathFile}.stop"
+
+        fi
+
+      else
+        ShowMessage "info" "${ThisReturnCode}"
+
+      fi
+
+    fi
+
+  fi
+}
+
+#---------------------------------------------------
+#
+# set variables to default values, load ConfigThis.conf
+#
+clear
+
+LoadConfValues
+
+#---------------------------------------------------
+#
+# display script name and parameters
+#
+ShowMessage "show" "----- ${0}"
+ShowMessage "show" "-----   ${1} ${2} ${3} ${4} ${5} ${6} ${7}"
+
+#---------------------------------------------------
+#
+# check parameter 1 for '-help'
+#
+if [[ -z "${1}" || (! -z "${1}" && ( "${1}" = "-help" || "${1}" = "--help" || "${1}" = "-Help" || "${1}" = "--Help" || "${1}" = "-h" || "${1}" = "--h"  || "${1}" = "-H" || "${1}" = "--H" )) ]]
+then
+  strPathFileHelp="${ConfigThis_share}/ConfigThis.txt"
+
+  if [[ ! -f "${strPathFileHelp}" ]]
+  then
+    if [[ ! -f "ConfigThis.txt" ]]
+    then
+      ShowMessage "err" "setup error - missing ${ConfigThis_share}/ConfigThis.txt "
+
+      exit 0
+
+    else
+      cat "ConfigThis.txt"
+
+      exit 0
+
+    fi
+
+  else
+    cat "${strPathFileHelp}"
+
+    exit 0
+
+  fi
+
+  # display environment variables associated with ConfigThis
+  #
+  printenv | grep "ConfigThis" | sort
+
+  ShowMessage "show" "-----"
+
+  exit 0
+
+# else
+#   continue ConfigThis
+#
+
+fi
+
+#---------------------------------------------------
+#
+# check parameter 1 for '-conf' - list the contents of ConfigThis.conf
+#
+if [[ -z "${1}" || (! -z "${1}" && ( "${1}" == "-conf" || "${1}" == "--conf" || "${1}" == "-Conf" || "${1}" == "--Conf" || "${1}" == "-c" || "${1}" == "--c"  || "${1}" == "-C" || "${1}" == "--C" )) ]]
+then
+  strPathConf=""
+  ConfigThis_conf=""
+  strThisBinPath="${0}"
+  ConfigThis_bin="$( awk -v rmv="/ConfigThis" -v path="$strThisBinPath" 'BEGIN{sub(rmv,"",path); print path}' )"
+
+  if [[ ! -f "${ConfigThis_bin}/ConfigThis.conf" ]]
+  then
+    if [[ -f "/etc/ConfigThis/ConfigThis.conf" ]]
+    then
+      strPathConf="/etc/ConfigThis"
+    fi
+  else
+    strPathConf="${ConfigThis_bin}"
+  fi
+
+  ConfigThis_conf="${strPathConf}/ConfigThis.conf"
+
+  if [[ ! -f "${ConfigThis_conf}" ]]
+  then
+    if [[ ! -f "ConfigThis.conf" ]]
+    then
+      ShowMessage "err" "setup error - missing ${ConfigThis_conf}"
+
+      exit 0
+
+    else
+      cat "ConfigThis.conf"
+
+      exit 0
+
+    fi
+
+  else
+    cat "${ConfigThis_conf}"
+
+    exit 0
+
+  fi
+
+fi
+
+#---------------------------------------------------
+#
+# check parameter 1 for '-logs' - list all log files
+#
+if [[ ! -z "${1}" && ( "${1}" == "-Logs" || "${1}" == "--Logs" || "${1}" == "-logs" || "${1}" == "--logs" || "${1}" == "-l" || "${1}" == "-L" || "${1}" == "--l" || "${1}" == "--L" ) ]]
+then
+  if [[ -z "${2}" || -z "${3}" || -z "${4}" ]]
+  then
+    ShowMessage "show" " "
+    ShowMessage "show" "----- One or more parameters not provided"
+    ShowMessage "show" "----- [1] required -  project: ${2}"
+    ShowMessage "show" "----- [2] required - platform: ${3}"
+    ShowMessage "show" "----- [3] required -  version: ${4}"
+    ShowMessage "show" " "
+
+    exit 0
+
+  else
+    ThisPlatformVersion="${ConfigThis_home}/${ConfigThis_root}/${2}/${3}_${4}"
+
+    ShowMessage "show" "----- List of logs"
+
+    if [[ -d "${ThisPlatformVersion}" && ! -L "${ThisPlatformVersion}" && -x "${ThisPlatformVersion}" ]]
+    then
+      #ListDirectory "path" "f" "name" "indent" "label" "1"
+      ListDirectory "${ThisPlatformVersion}" "f" "*.log" "      " "log" "1"
+
+    else
+      ShowMessage "show" " "
+      ShowMessage "show" "----- This directory does not exist:"
+      ShowMessage "show" "-----   ${ThisPlatformVersion}"
+    fi
+
+  fi
+
+  ShowMessage "show" "-----"
+  ShowMessage "show" "----- Next:"
+  ShowMessage "show" "-----   Execute ConfigThis for testing and reporting"
+  ShowMessage "show" "-----     ConfigThis aProject aPlatform aVersion"
+  ShowMessage "show" "-----     ConfigThis aProject aPlatform aVersion aCategory"
+  ShowMessage "show" "-----     ConfigThis aProject aPlatform aVersion aCategory aLink"
+  ShowMessage "show" "-----     ConfigThis aProject aPlatform aVersion -nostop"
+  ShowMessage "show" "-----"
+  ShowMessage "show" "-----   Execute ConfigThis to edit a log"
+  ShowMessage "show" "-----     ConfigThis -log"
+  ShowMessage "show" "-----       defaults to the last log created by ConfigThis"
+  ShowMessage "show" "-----     ConfigThis -log aProject aPlatform aVersion"
+  ShowMessage "show" "-----       defaults to the last log created for the project"
+  ShowMessage "show" "-----"
+
+  exit 0
+fi
+
+#---------------------------------------------------
+#
+# check parameter 1 for '-log' - edit the last log file
+#
+if [[ ! -z "${1}" && ( "${1}" == "-Log" || "${1}" == "--Log" || "${1}" == "-log" || "${1}" == "--log" || "${1}" == "-l" || "${1}" == "-L" || "${1}" == "--l" || "${1}" == "--L" ) ]]
+then
+  ThisLogFile=""
+
+  if [[ -z "${2}" || -z "${3}" || -z "${4}" ]]
+  then
+    if [[ -z "${ConfigThis_log}" ]]
+    then
+      ShowMessage "show" " "
+      ShowMessage "show" "----- ConfigThis has not defined a log file, you must specify a location"
+      ShowMessage "show" "----- [1] required -  project: ${2}"
+      ShowMessage "show" "----- [2] required - platform: ${3}"
+      ShowMessage "show" "----- [3] required -  version: ${4}"
+      ShowMessage "show" " "
+
+      exit 0
+
+    else
+      ShowMessage "show" " "
+      ShowMessage "show" "----- No parameters provided, use:"
+      ShowMessage "show" "-----   ${ConfigThis_log}"
+      ShowMessage "show" "----- "
+      ShowMessage "show" "----- Parameters"
+      ShowMessage "show" "----- [1] optional -  project: ${2}"
+      ShowMessage "show" "----- [2] optional - platform: ${3}"
+      ShowMessage "show" "----- [3] optional -  version: ${4}"
+      ShowMessage "show" " "
+
+      ThisLogFile="${ConfigThis_log}"
+
+    fi
+
+  else
+    ThisPlatformVersion="${ConfigThis_home}/${ConfigThis_root}/${2}/${3}_${4}"
+
+    if [[ -d "${ThisPlatformVersion}" && ! -L "${ThisPlatformVersion}" && -x "${ThisPlatformVersion}" ]]
+    then
+      ThisPathList=$(sudo find ${ThisPlatformVersion} -maxdepth 1 -type f -name "*.log" | sort | tail --lines=1 )
+
+      if [[ -n "${ThisPathList}" ]]
+      then
+        ThisLogFile="${ThisPathList}"
+
+        ShowMessage "show" " "
+        ShowMessage "show" "----- Found log"
+        ShowMessage "show" "-----   ${ThisLogFile}"
+
+      else
+        ShowMessage "show" " "
+        ShowMessage "show" "----- Did not find a log"
+
+      fi
+
+    fi
+
+  fi
+
+  if [[ ! -z "${ThisLogFile}" ]]
+  then
+    if [[ -f "${ThisLogFile}" && ! -L "${ThisLogFile}" ]]
+    then
+      if [[ ! -z "${ConfigThis_editor}" ]]
+      then
+        ShowMessage "show" "-----"
+        ShowMessage "show" "----- Do you want to edit the log now [yn]:"
+
+        read strYN
+
+        if [[ "${#strYN}" == 1 && ( "${strYN}" == "Y"  || "${strYN}" == "y" ) ]]
+        then
+          ShowMessage "show" "----- Load editor ${ConfigThis_editor}"
+
+          "${ConfigThis_editor}" "${strLogFile}" 2>/dev/null
+
+        else
+          ShowMessage "show" "-----"
+          ShowMessage "show" "----- editting deferred to a later time"
+
+        fi
+
+      else
+        ShowMessage "show" "-----"
+        ShowMessage "show" "----- editor not specified in ConfigThis.conf"
+
+      fi
+
+    else
+      ShowMessage "show" " "
+      ShowMessage "show" "----- This log does not exist or is a link:"
+      ShowMessage "show" "-----   ${ThisLogFile}"
+
+    fi
+
+  else
+    ShowMessage "show" "-----"
+    ShowMessage "show" "----- log not specified"
+
+  fi
+
+  ShowMessage "show" "-----"
+  ShowMessage "show" "----- Next:"
+  ShowMessage "show" "-----   Execute ConfigThis for testing and reporting"
+  ShowMessage "show" "-----     ConfigThis aProject aPlatform aVersion"
+  ShowMessage "show" "-----     ConfigThis aProject aPlatform aVersion aCategory"
+  ShowMessage "show" "-----     ConfigThis aProject aPlatform aVersion aCategory aLink"
+  ShowMessage "show" "-----     ConfigThis aProject aPlatform aVersion -nostop"
+  ShowMessage "show" "-----"
+
+  exit 0
+fi
+
+#---------------------------------------------------
+#
+# valid command line parameters processed
+# test for any other command line parameter and print -help
+#
+if [[ ! -z "${1}" && "${1:0:1}" == "-" ]]
+then
+  ShowMessage "info" "----- Invalid option ${1}"
+
+  strPathFileHelp="${ConfigThis_share}/ConfigThis.txt"
+
+  if [[ ! -f "${strPathFileHelp}" ]]
+  then
+    if [[ ! -f "ConfigThis.txt" ]]
+    then
+      ShowMessage "err" "setup error - missing ${ConfigThis_share}/ConfigThis.txt "
+
+    else
+      cat "ConfigThis.txt"
+
+    fi
+
+  else
+    cat "${strPathFileHelp}"
+
+  fi
+
+  exit 0
+
+fi
+
+#---------------------------------------------------
+#
+# command line parameters
+#   $1 (Project) and $2 (Platform) and $3 (Version) and $4 (Category) and $5 (Link)
+#
+if [[ -z "${1}" || -z "${2}" || -z "${3}" ]]
+then
+  ShowMessage "show" " "
+  ShowMessage "show" "----- One or more parameters not provided"
+  ShowMessage "show" "----- [1] required -  project: ${1}"
+  ShowMessage "show" "----- [2] required - platform: ${2}"
+  ShowMessage "show" "----- [3] required -  version: ${3}"
+  ShowMessage "show" "----- [4] optional - category: ${4}"
+  ShowMessage "show" "----- [4] optional -  -nostop"
+  ShowMessage "show" "----- [5] optional -     link: ${5}"
+  ShowMessage "show" "-----     Note: category and link ignored if -nostop"
+  ShowMessage "show" " "
+
+  #---------------------------------------------------
+  #
+  # if both platform and version not provided then make suggestions
+  #
+  ThisPathList=$(find ${ConfigThis_home}/${ConfigThis_root} -maxdepth 1 -type d ! -name "vendor" | sed -e "s/\.\///" )
+
+  if [[ ! -z "${ThisPathList}" ]]
+  then
+    ShowMessage "show" "----- Possible project(s):"
+    ShowMessage "show" " "
+
+    i=1
+
+    for ThisPath in $ThisPathList
+    do
+      if [[ -d "${ThisPath}" && ! -L "${ThisPath}" && -x "${ThisPath}" ]]
+      then
+        TempString="$( awk -v rmv="${ConfigThis_home}/${ConfigThis_root}" -v path="$ThisPath" 'BEGIN{sub(rmv,"",path); print path}' )"
+        TempString="$( awk -v rmv="/" -v path="$TempString" 'BEGIN{sub(rmv,"",path); print path}' )"
+
+        if [[ "${#TempString}" -gt 1 ]]
+        then
+          ShowMessage "show" "----- ${i}) ${TempString}"
+
+          i=$(($i + 1))
+
+          ThisPlatformList=$(find ${ThisPath} -maxdepth 1 -type d -name "*_*")
+
+          if [[ ! -z "${ThisPlatformList}" ]]
+          then
+            ShowMessage "show" " "
+            ShowMessage "show" "----- Possible platform(s) version(s):"
+
+            j=1
+
+            for ThisPlatformPath in $ThisPlatformList
+            do
+              if [[ -d "${ThisPlatformPath}" && ! -L "${ThisPlatformPath}" && -x "${ThisPlatformPath}" ]]
+              then
+                TempString="$( awk -v rmv="$ThisPath" -v path="$ThisPlatformPath" 'BEGIN{sub(rmv,"",path); print path}' )"
+                TempString="$( awk -v rmv="/" -v path="$TempString" 'BEGIN{sub(rmv,"",path); print path}' )"
+
+                if [[ "${#TempString}" -gt 1 ]]
+                then
+                  ShowMessage "show" "-----   ${j}) ${TempString}"
+
+                  j=$(($j + 1))
+
+                fi
+
+              fi
+
+            done
+
+            ShowMessage "show" " "
+
+          fi
+
+        fi
+
+      fi
+
+    done
+
+    ShowMessage "show" " "
+
+  else
+    ShowMessage "info" "No projects found"
+    ShowMessage "show" " "
+
+  fi
+
+else
+  ShowMessage "show" "----- [1] required -  project: ${1}"
+  ShowMessage "show" "----- [2] required - platform: ${2}"
+  ShowMessage "show" "----- [3] required -  version: ${3}"
+  ShowMessage "show" "----- [4] optional - category: ${4}"
+  ShowMessage "show" "----- [4] optional -  -nostop"
+  ShowMessage "show" "----- [5] optional -     link: ${5}"
+  ShowMessage "show" "-----     Note: category and link ignored if -nostop"
+  ShowMessage "show" " "
+
+  #---------------------------------------------------
+  #
+  # Project, Platform, and Version provided - get link Category paths
+  #
+  ThisPlatformVersion="${ConfigThis_home}/${ConfigThis_root}/${1}/${2}_${3}"
+
+  #
+  # defer setting ConfigThis_log until after parameters have been processed
+  #
+  export ConfigThis_log="${ThisPlatformVersion}/ConfigThis-$(MakeDateTimeString).log"
+
+  #
+  # the parent shell does not 'inherit' script shell environment vars
+  # need to update ConfigThis.conf to persist when used with the -log option
+  #
+  if [[ -f "${ConfigThis_conf}" && -w "${ConfigThis_conf}" ]]
+  then
+    if grep -l "ConfigThis_log" "${ConfigThis_conf}" >/dev/null 2>/dev/null
+    then
+      sudo sed -i -e 's%ConfigThis_log.*%ConfigThis_log='$ConfigThis_log'%' /etc/ConfigThis/ConfigThis.conf
+    else
+      sudo echo "export ConfigThis_log=${ConfigThis_log}" >> "${ConfigThis_conf}"
+    fi
+  fi
+
+  if [[ -d "${ThisPlatformVersion}" && ! -L "${ThisPlatformVersion}" && -x "${ThisPlatformVersion}" ]]
+  then
+    ThisPathList=$(find ${ThisPlatformVersion} -maxdepth 1 -type d -name "config*" | sort)
+
+    # The variable 'ThisPathList' contains a sorted list of matching path names
+    #
+    if [[ -n "${ThisPathList}" ]]
+    then
+      boolNoStop="FALSE"
+      ThisCategory=""
+
+      if [[ ! -z "${4}" ]]
+      then
+        if [[ "${4}" == "-nostop" ]]
+        then
+          boolNoStop="TRUE"
+
+        else
+          ThisCategory="$(GetCategoryPathFromCode ${4})"
+
+        fi
+
+      fi
+
+      if [[ ! -z "${4}" && "${boolNoStop}" == "FALSE" ]]
+      then
+        if [[ -z "${ThisCategory}" || "${#ThisCategory}" -eq 0 ]]
+        then
+          ShowMessage "info" "${4} is not a valid category number"
+
+          exit 0
+        fi
+
+        if [[ -d "${ThisPlatformVersion}/${ThisCategory}" && ! -L "${ThisPlatformVersion}/${ThisCategory}" && -x "${ThisPlatformVersion}/${ThisCategory}" ]]
+        then
+          TempString="$( awk -v rmv="$ThisPlatformVersion" -v path="$ThisPath" 'BEGIN{sub(rmv,"",path); print path}' )"
+
+          ShowMessage "show" "----- 1) Found link category ${TempString}"
+
+          if [[ ! -z "${5}" ]]
+          then
+            ThisLink="${5}"
+
+            if [[ ! -L "${ThisPlatformVersion}/${ThisCategory}/${ThisLink}" || ! -x "${ThisPlatformVersion}/${ThisCategory}/${ThisLink}" ]]
+            then
+              ShowMessage "info" "${ThisLink} is not an executable link"
+
+              exit 0
+
+            else
+              ShowMessage "show" "-----    Execute ${i}) ${ThisLink}}"
+              ShowMessage "show" "-----      $(readlink -e -v ${ThisPlatformVersion}/${ThisCategory}/${ThisLink})"
+              ShowMessage "show" "-------------------------------------------------------"
+
+              "${ThisPlatformVersion}/${ThisCategory}/${ThisLink}" 2>>"${ConfigThis_log}" 1>>"${ConfigThis_log}"
+
+              retVal="$?"
+
+              retVal=$(CheckReturnCode "${retVal}" "${ThisPlatformVersion}/${ThisCategory}/${ThisLink}")
+
+            fi
+
+          else
+            ThisFileCount=0
+            ThisStopCount=0
+            ThisStopFile=""
+
+            ThisLastStopCount=$(find ${ThisPlatformVersion}/${ThisCategory} -type f -name "last.stop" | wc -l)
+
+            if [[ ThisLastStopCount -eq 0 ]]
+            then
+              ThisFileList=$(find ${ThisPlatformVersion}/${ThisCategory}  -type l -executable | sort)
+              ThisFileCount=$(find ${ThisPlatformVersion}/${ThisCategory} -type l -executable | wc -l)
+
+              if [[ -n "${ThisFileList}" && "${ThisFileCount}" -gt 0 ]]
+              then
+                ShowMessage "show" "-----    Found ${ThisFileCount} executable links in ${ThisCategory}"
+
+                ThisStopCount=$(find "${ThisPlatformVersion}/${ThisCategory}" -type f -name "*.stop" | wc -l)
+
+                if [[ "${ThisStopCount}" -gt 0 ]]
+                then
+                  ThisStopList=$(find ${ThisPlatformVersion}/${ThisCategory}  -type f -name "*.stop" | sort)
+
+                  for ThisStop in $ThisStopList
+                  do
+                    TempString="$( awk -v rmv="$ThisPlatformVersion" -v path="$ThisStop" 'BEGIN{sub(rmv,"",path); print path}' )"
+
+                    strStopFile="$( awk -v rmv=".stop" -v path="$TempString" 'BEGIN{sub(rmv,"",path); print path}' )"
+                    ThisStopFile="$( awk -v rmv="$ThisCategory/" -v path="$strStopFile" 'BEGIN{sub(rmv,"",path); print path}' )"
+
+                    ShowMessage "show" "-----    found stop file: ${ThisStopFile}"
+                    ShowMessage "info" "-----    rm ${TempString}"
+                    ShowMessage "show" "-------------------------------------------------------"
+
+                    sudo rm "${ThisStop}" 1>>"${ConfigThis_log}" 2>>"${ConfigThis_log}"
+
+                  done
+                fi
+
+                i=1
+
+                boolNotStoppedYet="TRUE"
+
+                for ThisFile in $ThisFileList
+                do
+                  if [[ -L "${ThisFile}" && -x "${ThisFile}" ]]
+                  then
+
+                    TempString="$( awk -v rmv="$ThisPlatformVersion/$ThisCategory" -v path="$ThisFile" 'BEGIN{sub(rmv,"",path); print path}' )"
+
+                    if [[ "${ThisStopCount}" -gt 0 && "${boolNotStoppedYet}" == "TRUE" && "${ThisStopFile}" == "${TempString}" ]]
+                    then
+                      boolNotStoppedYet="FALSE"
+
+                    fi
+
+                    if [[ ( "${ThisStopCount}" -gt 0 && "${boolNotStoppedYet}" == "FALSE" ) || "${ThisStopCount}" -eq 0 ]]
+                    then
+                      ShowMessage "show" "-----    Execute ${i}) ${TempString}"
+                      ShowMessage "show" "-----      $(readlink -e -v ${ThisFile})"
+
+                      "${ThisFile}" 2>>"${ConfigThis_log}" 1>>"${ConfigThis_log}"
+
+                      retVal="$?"
+
+                      retVal=$(CheckReturnCode "${retVal}" "${ThisFile}")
+
+                      if [[ "${retVal}" != "0" ]]
+                      then
+                        ShowMessage "show" "-----      Stop"
+                        ShowMessage "show" "-------------------------------------------------------"
+
+                        break
+
+                      fi
+
+                      ShowMessage "show" "x -------------------------------------------------------"
+
+                      i=$(($i + 1))
+
+                    fi
+
+                  else
+                    ShowMessage "info" "${ThisFile} is not an executable link"
+
+                  fi
+
+                done
+
+                readarray -t ThisFileArray <<<"${ThisFileList}"
+
+                if [[ "$(($i - 1))" -eq "${#ThisFileArray[@]}" ]]
+                then
+                  TempString="$( awk -v rmv="$ThisPlatformVersion" -v path="$ThisFile" 'BEGIN{sub(rmv,"",path); print path}' )"
+
+                  ShowMessage "show" "-----    Last stop:"
+                  ShowMessage "show" "-----      ${TempString}"
+                  ShowMessage "show" "-------------------------------------------------------"
+
+                  echo -e "$(MakeDateTimeString) - [lnk] ${ThisFile}" 2>/dev/null >"${ThisPlatformVersion}/${ThisCategory}/last.stop"
+                  echo -e "$(MakeDateTimeString) - [src] $(readlink -e -v ${ThisFile})" 2>/dev/null >>"${ThisPlatformVersion}/${ThisCategory}/last.stop"
+
+                fi
+
+              else
+                  ShowMessage "show" "-----    ${ThisCategory} does not contain executable links"
+
+              fi
+
+            else
+              ShowMessage "info" "-----    ${TempString} contains a last.stop file"
+
+            fi
+
+          fi
+
+        else
+          ShowMessage "info" "${ThisCategory} is not a valid category"
+
+        fi
+
+      else
+      #
+      # boolNoStop is FALSE - check for .stop file and delete it and start there
+      #
+        i=1
+
+        for ThisPath in $ThisPathList
+        do
+          if [[ -d "${ThisPath}" && ! -L "${ThisPath}" && -x "${ThisPath}" ]]
+          then
+            ThisFileCount=0
+            ThisStopCount=0
+            ThisLastStopCount=0
+            ThisStopFile=""
+
+            TempString="$( awk -v rmv="$ThisPlatformVersion" -v path="$ThisPath" 'BEGIN{sub(rmv,"",path); print path}' )"
+
+            ShowMessage "show" "----- ${i}) Found link category ${TempString}"
+
+            i=$(($i + 1))
+
+            TempString="$( awk -v rmv="$ThisPlatformVersion" -v path="$ThisPath" 'BEGIN{sub(rmv,"",path); print path}' )"
+
+            ThisLastStopCount=$(find ${ThisPath} -type f -name "last.stop" | wc -l)
+
+            if [[ ThisLastStopCount -eq 0 ]]
+            then
+              ThisFileList=$(find ${ThisPath}  -type l -executable | sort)
+              ThisFileCount=$(find ${ThisPath} -type l -executable | wc -l)
+
+              if [[ -n "${ThisFileList}" && "${ThisFileCount}" -gt 0 ]]
+              then
+                ShowMessage "show" "-----    Found ${ThisFileCount} executable links in ${TempString}"
+
+                ThisStopCount=$(find "${ThisPath}" -type f -name "*.stop" | wc -l)
+
+                if [[ "${ThisStopCount}" -gt 0 ]]
+                then
+                  ShowMessage "info" "-----    ${TempString} contains one or more stop files"
+
+                  ThisStopList=$(find ${ThisPath}  -type f -name "*.stop" | sort)
+
+                  for ThisStop in $ThisStopList
+                  do
+                    TempString="$( awk -v rmv="$ThisPlatformVersion" -v path="$ThisStop" 'BEGIN{sub(rmv,"",path); print path}' )"
+
+                    strCategory="$( awk -v rmv="$ThisPlatformVersion" -v path="$ThisPath" 'BEGIN{sub(rmv,"",path); print path}' )"
+                    strStopFile="$( awk -v rmv=".stop" -v path="$TempString" 'BEGIN{sub(rmv,"",path); print path}' )"
+                    ThisStopFile="$( awk -v rmv="$strCategory" -v path="$strStopFile" 'BEGIN{sub(rmv,"",path); print path}' )"
+
+                    ShowMessage "show" "-----    found stop file: ${ThisStopFile}"
+                    ShowMessage "info" "-----    rm ${TempString}"
+                    ShowMessage "show" "-------------------------------------------------------"
+
+                    sudo rm "${ThisStop}" 1>>"${ConfigThis_log}" 2>>"${ConfigThis_log}"
+
+                  done
+
+                fi
+
+                j=1
+
+                boolNotStoppedYet="TRUE"
+
+                for ThisFile in $ThisFileList
+                do
+                  if [[ -x "${ThisFile}" ]]
+                  then
+                    TempString="$( awk -v rmv="$ThisPath" -v path="$ThisFile" 'BEGIN{sub(rmv,"",path); print path}' )"
+
+                    if [[ "${ThisStopCount}" -gt 0 && "${boolNotStoppedYet}" == "TRUE" && "${ThisStopFile}" == "${TempString}" ]]
+                    then
+                      boolNotStoppedYet="FALSE"
+
+                    fi
+
+                    if [[ ( "${ThisStopCount}" -gt 0 && "${boolNotStoppedYet}" == "FALSE" ) || "${ThisStopCount}" -eq 0 ]]
+                    then
+                      ShowMessage "show" "-----    Execute ${j}) ${TempString}"
+                      ShowMessage "show" "-----      $(readlink -e -v ${ThisFile})"
+
+                      "${ThisFile}" 2>>"${ConfigThis_log}" 1>>"${ConfigThis_log}"
+
+                      retVal="$?"
+
+                      retVal=$(CheckReturnCode "${retVal}" "${ThisFile}")
+
+                      if [[ "${retVal}" != "0" ]]
+                      then
+                        ShowMessage "show" "-----      Stop"
+                        ShowMessage "show" "-------------------------------------------------------"
+
+                        break
+
+                      fi
+
+                      ShowMessage "show" "-------------------------------------------------------"
+
+                      j=$(($j + 1))
+
+                    fi
+
+                  else
+                    TempString="$( awk -v rmv="$ThisPlatformVersion" -v path="$ThisPath" 'BEGIN{sub(rmv,"",path); print path}' )"
+
+                    ShowMessage "info" "${TempString} is not an executable link"
+
+                  fi
+
+                done
+
+                readarray -t ThisFileArray <<<"$ThisFileList"
+
+                if [[ "$(($j - 1))" -eq "${#ThisFileArray[@]}" ]]
+                then
+                  TempString="$( awk -v rmv="$ThisPlatformVersion" -v path="$ThisFile" 'BEGIN{sub(rmv,"",path); print path}' )"
+
+                  ShowMessage "show" "-----    Last stop:"
+                  ShowMessage "show" "-----      ${TempString}"
+                  ShowMessage "show" "-------------------------------------------------------"
+
+                  echo -e "$(MakeDateTimeString) - [lnk] ${ThisFile}" 2>/dev/null >"${ThisPath}/last.stop"
+                  echo -e "$(MakeDateTimeString) - [src] $(readlink -e -v ${ThisFile})" 2>/dev/null >>"${ThisPath}/last.stop"
+
+                fi
+
+              else
+                TempString="$( awk -v rmv="$ThisPlatformVersion" -v path="$ThisPath" 'BEGIN{sub(rmv,"",path); print path}' )"
+
+                ShowMessage "info" "-----    ${TempString} does not contain executable links"
+
+              fi
+
+            else
+              ShowMessage "info" "-----    ${TempString} contains a last.stop file"
+
+            fi
+
+          else
+            ShowMessage "show" "-----    ${ThisPath} is not accessible"
+
+          fi
+
+        done
+
+      fi
+
+    else
+      ShowMessage "show" "-----    ${ThisPathList} does not contain valid categories"
+
+    fi
+
+  else
+    ShowMessage "show" "-----    ${2}_${3} is not a valid platform version"
+
+  fi
+
+fi
+
+#---------------------------------------------------
+#
+# exit
+#
+ShowMessage "show" "-------------------------------------------------------"
+ShowMessage "show" " "

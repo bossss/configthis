@@ -1,0 +1,2588 @@
+#!/bin/bash
+#================================================================================
+#
+#  ConfigThis & ConfigMake - ConfigMake executable shell script
+#
+#================================================================================
+#
+#  Author:                   Barry Floyd (troybarryfloyd)
+#  Description:              Auditing tool
+#  Documentation:            README, ConfigThis.html, ConfigMake.txt, ConfigThis.txt
+#  Latest Version:           2014.10.23
+#  License:                  GNU GPL v3 2007
+#  Copyright (c) 2014 bossss.org
+#
+#================================================================================
+#
+#  Planned options:
+#  o ConfigMake -project aProject -copyto bProject
+#  o ConfigMake -vendor  aVendor  -copyto bVendor
+#  o ConfigMake -file aReqFile aVendor aCategory -delete
+#  o ConfigMake -link aReqLink aProject aPlatform aVersion aCategory -unlink
+#
+#  Misc:
+#  o Test for ConfigThis_editor before using editor
+#  o Check code for usage of "${}" style vs ${} or $
+#  o chown and chmod aProject/aPlatform_aVersion/ vs aProject/
+#  o Check for /var/lib/sudo timestamp file before prompting for sudo pw
+#  o see other in-line REFACTOR comments
+#
+#---------------------------------------------------
+#
+# define functions
+#
+function MakeDateTimeString()
+{
+  # no parameters passed in
+  #
+  printf "%s" "$(date +%Y%m%d-%H%M%S)"
+}
+
+function ShowMessage()
+{
+  # arg 1: severity level string
+  # arg 2: message string
+  #
+  local EMERGENCY="emergency"
+  local ALERT="alert"
+  local CRITICAL="critical"
+  local ERROR="error"
+  local WARNING="warning"
+  local NOTICE="notice"
+  local INFO="info"
+  local DEBUG="debug"
+
+  local strLevel=""
+  local strMessage=""
+
+  if [[ ! -z "${1}" && "${1}" == "err" ]]
+  then
+    strLevel="err"
+
+  else
+    if [[ ! -z "${1}" && "${1}" == "show" ]]
+    then
+      strLevel="show"
+
+    else
+      if [[ ! -z "${1}" && "${1}" == "debug" ]]
+      then
+        strLevel="debug"
+
+      else
+        strLevel="info"
+
+      fi
+
+    fi
+
+  fi
+
+  if [[ ! -z "${3}" && "${3}" == "long" ]]
+  then
+    if [[ ! -z "${2}" ]]
+    then
+      strMessage=" -- ConfigThis -- ${2}"
+
+    else
+      strMessage=" -- ConfigThis -- ${FUNCNAME[ 1 ]}"
+
+    fi
+
+    strMessage="$(MakeDateTimeString) --${strLevel} --id $$  --msg ${strMessage}"
+
+  else
+    strMessage="${2}"
+
+  fi
+
+  # REFACTOR: cannot get new 'facility' to work; msg filter did work now doesn't
+  # sort order of 'facility' conf files in /etc/rsyslog.d/ effecting setting?
+  # syslog3 'facility' previously set up to accept ConfigThis messages
+  #   logger --priority ConfigThis.info "information message" --
+  #   logger --priority ConfigThis.err  "error message" --
+  #
+  # logger --stderr --priority local1."${strLevel}" --id "${strMessage}" --
+
+  if [[ "${strLevel}" != "debug" ]]
+  then
+    echo -e "${strMessage}"
+  fi
+
+  #  if [[ "${strLevel}" != "show" ]]
+  #  then
+  #    # also output to sys log ?
+  #  fi
+}
+
+function GetCategoryPathFromCode()
+{
+  # arg 1: category code ####
+  #
+  local strCategoryPath=""
+
+  if [[ ! -z "${1}" ]]
+  then
+    if [[ "${#1}" == 4 ]]
+    then
+      case "${1}" in
+        1000) strCategoryPath="config_1000_os"
+              ;;
+        2000) strCategoryPath="config_2000_ip"
+              ;;
+        3000) strCategoryPath="config_3000_usr"
+              ;;
+        4000) strCategoryPath="config_4000_vm"
+              ;;
+        5000) strCategoryPath="config_5000_dev"
+              ;;
+        6000) strCategoryPath="config_6000_db"
+              ;;
+        7000) strCategoryPath="config_7000_app"
+              ;;
+        8000) strCategoryPath="config_8000_mon"
+              ;;
+        9000) strCategoryPath="config_9000_bak"
+              ;;
+           *) ShowMessage "show" "-----"
+              ShowMessage "info" "----- Invalid category number: ${1}"
+              ;;
+      esac
+
+    else
+      strCategoryPath="config_1000_os"
+
+    fi
+
+  else
+    strCategoryPath="config_1000_os"
+
+  fi
+
+  printf "%s" "${strCategoryPath}"
+}
+
+function ConfigSyslog3()
+{
+  # no parameters passed in
+  #
+
+  # Configure to automatically send logger (syslog3) messages to the specified file
+  if [[ -d "/etc/rsyslog.d" ]]
+  then
+    if [[ -n "$(find /etc/rsyslog.d -maxdepth 1 -type f -name '*ConfigThis*')" ]]
+    then
+      # do nothing
+      #
+      ShowMessage "show" "----- Found rsyslog ConfigThis.conf"
+
+    else
+      # Create a conf file
+      #
+      ShowMessage "show" "----- Create rsyslog ConfigThis.conf"
+
+      # 'facility'
+      # sudo touch     /etc/rsyslog.d/99-ConfigThis.conf 2>/dev/null
+      # sudo chmod 666 /etc/rsyslog.d/99-ConfigThis.conf 2>/dev/null
+      # sudo echo -e "ConfigThis.* -/var/log/ConfigThis.log" > /etc/rsyslog.d/99-ConfigThis.conf 2>/dev/null
+      # sudo echo -e "ConfigThis.* ~" > /etc/rsyslog.d/99-ConfigThis.conf 2>/dev/null
+      # OR 'filter'
+      # sudo echo -e ":msg,contains,'ConfigThis' /var/log/ConfigThis.log" > /etc/rsyslog.d/99-ConfigThis.conf 2>/dev/null
+      # sudo chmod 644 /etc/rsyslog.d/99-ConfigThis.conf 2>/dev/null
+
+      if [[ -f "/var/run/rsyslogd.pid" ]]
+      then
+        # reload conf
+        #
+        ShowMessage "show" "----- Reload rsyslog conf files"
+
+        # sudo kill -HUP "$(cat /var/run/rsyslogd.pid)"
+
+      fi
+
+    fi
+
+  else
+    if [[ -d "/etc/syslog.d" ]]
+    then
+      if [[ -n "$(find /etc/syslog.d -maxdepth 1 -type f -name '*ConfigThis*')" ]]
+      then
+        # do nothing
+        #
+        ShowMessage "show" "----- Found syslog ConfigThis.conf"
+
+      else
+        # Create a conf file
+        #
+        ShowMessage "show" "----- Create syslog ConfigThis.conf"
+
+        # 'facility'
+        # sudo touch     /etc/syslog.d/99-ConfigThis.conf 2>/dev/null
+        # sudo chmod 666 /etc/syslog.d/99-ConfigThis.conf 2>/dev/null
+        # sudo echo -e "ConfigThis.* -/var/log/ConfigThis.log" > /etc/syslog.d/99-ConfigThis.conf 2>/dev/null
+        # sudo echo -e "ConfigThis.* ~" > /etc/syslog.d/99-ConfigThis.conf 2>/dev/null
+        # OR 'filter'
+        # sudo echo -e ":msg,contains,'ConfigThis' /var/log/ConfigThis.log" > /etc/syslog.d/99-ConfigThis.conf 2>/dev/null
+        # sudo chmod 644 /etc/syslog.d/99-ConfigThis.conf 2>/dev/null
+
+        if [[ -f "/var/run/syslogd.pid" ]]
+        then
+          # reload conf
+          #
+          ShowMessage "show" "----- Reload syslog conf files"
+
+          # sudo kill -HUP "$(cat /var/run/syslogd.pid)"
+
+        fi
+
+      fi
+
+    else
+      ShowMessage "show" "----- Neither rsyslog nor syslog found"
+
+    fi
+
+  fi
+}
+
+function MakeProjectDirs()
+{
+  # arg 1: project  path name string
+  # arg 2: platform path name string
+  # arg 3: version  path name string
+  #
+  if [[ ! -z "${1}" && ! -z "${2}" && ! -z "${3}" ]]
+  then
+    local ThisProjectPlatformVersionPath="${1}/${2}/${3}"
+
+    if [[ ! -d "${ThisProjectPlatformVersionPath}"                       ]] ; then sudo mkdir -p "${ThisProjectPlatformVersionPath}"                     2>/dev/null ; fi
+    if [[ ! -d "${ThisProjectPlatformVersionPath}/config_1000_os"        ]] ; then sudo mkdir -p "${ThisProjectPlatformVersionPath}"/config_1000_os      2>/dev/null ; fi
+    if [[ ! -d "${ThisProjectPlatformVersionPath}/config_2000_ip"        ]] ; then sudo mkdir -p "${ThisProjectPlatformVersionPath}"/config_2000_ip      2>/dev/null ; fi
+    if [[ ! -d "${ThisProjectPlatformVersionPath}/config_3000_usr"       ]] ; then sudo mkdir -p "${ThisProjectPlatformVersionPath}"/config_3000_usr     2>/dev/null ; fi
+    if [[ ! -d "${ThisProjectPlatformVersionPath}/config_4000_vm"        ]] ; then sudo mkdir -p "${ThisProjectPlatformVersionPath}"/config_4000_vm      2>/dev/null ; fi
+    if [[ ! -d "${ThisProjectPlatformVersionPath}/config_5000_dev"       ]] ; then sudo mkdir -p "${ThisProjectPlatformVersionPath}"/config_5000_dev     2>/dev/null ; fi
+    if [[ ! -d "${ThisProjectPlatformVersionPath}/config_6000_db"        ]] ; then sudo mkdir -p "${ThisProjectPlatformVersionPath}"/config_6000_db      2>/dev/null ; fi
+    if [[ ! -d "${ThisProjectPlatformVersionPath}/config_7000_app"       ]] ; then sudo mkdir -p "${ThisProjectPlatformVersionPath}"/config_7000_app     2>/dev/null ; fi
+    if [[ ! -d "${ThisProjectPlatformVersionPath}/config_8000_mon"       ]] ; then sudo mkdir -p "${ThisProjectPlatformVersionPath}"/config_8000_mon     2>/dev/null ; fi
+    if [[ ! -d "${ThisProjectPlatformVersionPath}/config_9000_bak"       ]] ; then sudo mkdir -p "${ThisProjectPlatformVersionPath}"/config_9000_bak     2>/dev/null ; fi
+
+  fi
+}
+
+function MakeVendorDirs()
+{
+  # arg 1: ConfigThis home path name string
+  # arg 2: vendor path name string
+  #
+  if [[ ! -z "${1}" && ! -z "${2}" ]]
+  then
+    local ThisVendorPath="${1}/vendor"
+    local ThisOwner="${2}"
+
+    if [[ ! -d "${ThisVendorPath}"                                    ]] ; then sudo mkdir -p "${ThisVendorPath}"                        2>/dev/null ; fi
+
+    if [[ ! -d "${ThisVendorPath}/${ThisOwner}"                       ]] ; then sudo mkdir -p "${ThisVendorPath}"/"${ThisOwner}"                 2>/dev/null ; fi
+    if [[ ! -d "${ThisVendorPath}/${ThisOwner}/config_1000_os"        ]] ; then sudo mkdir -p "${ThisVendorPath}"/"${ThisOwner}"/config_1000_os  2>/dev/null ; fi
+    if [[ ! -d "${ThisVendorPath}/${ThisOwner}/config_2000_ip"        ]] ; then sudo mkdir -p "${ThisVendorPath}"/"${ThisOwner}"/config_2000_ip  2>/dev/null ; fi
+    if [[ ! -d "${ThisVendorPath}/${ThisOwner}/config_3000_usr"       ]] ; then sudo mkdir -p "${ThisVendorPath}"/"${ThisOwner}"/config_3000_usr 2>/dev/null ; fi
+    if [[ ! -d "${ThisVendorPath}/${ThisOwner}/config_4000_vm"        ]] ; then sudo mkdir -p "${ThisVendorPath}"/"${ThisOwner}"/config_4000_vm  2>/dev/null ; fi
+    if [[ ! -d "${ThisVendorPath}/${ThisOwner}/config_5000_dev"       ]] ; then sudo mkdir -p "${ThisVendorPath}"/"${ThisOwner}"/config_5000_dev 2>/dev/null ; fi
+    if [[ ! -d "${ThisVendorPath}/${ThisOwner}/config_6000_db"        ]] ; then sudo mkdir -p "${ThisVendorPath}"/"${ThisOwner}"/config_6000_db  2>/dev/null ; fi
+    if [[ ! -d "${ThisVendorPath}/${ThisOwner}/config_7000_app"       ]] ; then sudo mkdir -p "${ThisVendorPath}"/"${ThisOwner}"/config_7000_app 2>/dev/null ; fi
+    if [[ ! -d "${ThisVendorPath}/${ThisOwner}/config_8000_mon"       ]] ; then sudo mkdir -p "${ThisVendorPath}"/"${ThisOwner}"/config_8000_mon 2>/dev/null ; fi
+    if [[ ! -d "${ThisVendorPath}/${ThisOwner}/config_9000_bak"       ]] ; then sudo mkdir -p "${ThisVendorPath}"/"${ThisOwner}"/config_9000_bak 2>/dev/null ; fi
+
+  fi
+}
+
+function MakeBossssDirs()
+{
+  # arg 1: ConfigThis home path name string
+  #
+  if [[ ! -z "${1}" ]]
+  then
+    local ThisVendorPath="${1}/vendor"
+
+    if [[ ! -d "${ThisVendorPath}"                              ]] ; then sudo mkdir -p "${ThisVendorPath}"                        2>/dev/null ; fi
+
+    if [[ ! -d "${ThisVendorPath}/bossss"                       ]] ; then sudo mkdir -p "${ThisVendorPath}"/bossss                 2>/dev/null ; fi
+    if [[ ! -d "${ThisVendorPath}/bossss/config_1000_os"        ]] ; then sudo mkdir -p "${ThisVendorPath}"/bossss/config_1000_os  2>/dev/null ; fi
+    if [[ ! -d "${ThisVendorPath}/bossss/config_2000_ip"        ]] ; then sudo mkdir -p "${ThisVendorPath}"/bossss/config_2000_ip  2>/dev/null ; fi
+    if [[ ! -d "${ThisVendorPath}/bossss/config_3000_usr"       ]] ; then sudo mkdir -p "${ThisVendorPath}"/bossss/config_3000_usr 2>/dev/null ; fi
+    if [[ ! -d "${ThisVendorPath}/bossss/config_4000_vm"        ]] ; then sudo mkdir -p "${ThisVendorPath}"/bossss/config_4000_vm  2>/dev/null ; fi
+    if [[ ! -d "${ThisVendorPath}/bossss/config_5000_dev"       ]] ; then sudo mkdir -p "${ThisVendorPath}"/bossss/config_5000_dev 2>/dev/null ; fi
+    if [[ ! -d "${ThisVendorPath}/bossss/config_6000_db"        ]] ; then sudo mkdir -p "${ThisVendorPath}"/bossss/config_6000_db  2>/dev/null ; fi
+    if [[ ! -d "${ThisVendorPath}/bossss/config_7000_app"       ]] ; then sudo mkdir -p "${ThisVendorPath}"/bossss/config_7000_app 2>/dev/null ; fi
+    if [[ ! -d "${ThisVendorPath}/bossss/config_8000_mon"       ]] ; then sudo mkdir -p "${ThisVendorPath}"/bossss/config_8000_mon 2>/dev/null ; fi
+    if [[ ! -d "${ThisVendorPath}/bossss/config_9000_bak"       ]] ; then sudo mkdir -p "${ThisVendorPath}"/bossss/config_9000_bak 2>/dev/null ; fi
+
+  fi
+}
+
+function CheckReturnCode()
+{
+  # arg 1: return code number from function / command call
+  #
+  if [[ ! -z "${1}" ]]
+  then
+    local ThisReturnCode="${1}"
+
+    if [[ "${ThisReturnCode}" != 0 ]]
+    then
+      ShowMessage "err" "ERROR code from last command: ${ThisReturnCode} -----"
+
+      exit 0
+
+    fi
+
+  fi
+}
+
+function ListDirectory()
+{
+  # arg 1: directory  path name string - defaults to ./
+  # arg 2: type - either [f] file or [d] directory - defaults to [f], implies links
+  #        may be prefixed with [!] not / negate character
+  # arg 3: filter string with wild cards -
+  #        may be prefixed with [!] not / negate character
+  # arg 4: indent formatting string - any group of characters
+  # arg 5: "count" label (e.g. file, link, executable)
+  # arg 6: maxdepth defaults to 1
+  #
+  local ListThisDir="./"
+  local ListThisType="f"
+  local ListThisTypeParam="-type f"
+  local ListThisFilter=""
+  local ListThisFilterParam=""
+  local ListThisIndent=""
+  local ListThisCountLabel="file"
+  local ListThisMaxdepthParam="-maxdepth 1"
+
+  local ThisItemList=""
+  local TempString=""
+  local i=0
+  local ListThisSize=""
+  local ThisFileCount=""
+
+  # directory
+  if [[ ! -z "${1}" ]]
+  then
+    ListThisDir="${1}"
+  fi
+
+  # type
+  if [[ ! -z "${2}" && "${#2}" == 1 ]]
+  then
+    ListThisType="${2}"
+
+    if [[ "${ListThisType:0:1}" == "!" ]]
+    then
+      ListThisTypeParam="! -type ${ListThisType:1}"
+
+    else
+      ListThisTypeParam="-type ${ListThisType}"
+
+    fi
+
+  fi
+
+  # name filter
+  if [[ ! -z "${3}" && "${3// /}" > 0 ]]
+  then
+    ListThisFilter="${3// /}"
+
+    if [[ "${ListThisFilter:0:1}" == "!" ]]
+    then
+      ListThisFilterParam="! -name ${ListThisFilter:1}"
+
+    else
+      ListThisFilterParam="-name ${ListThisFilter}"
+
+    fi
+
+  fi
+
+  # formatting indent string
+  if [[ ! -z "${4}" && "${#4}" > 0 ]]
+  then
+    ListThisIndent="${4}"
+
+  fi
+
+  # count label
+  if [[ ! -z "${5}" && "${#5}" > 0 ]]
+  then
+    ListThisCountLabel="${5}"
+
+  fi
+
+  # find max search depth
+  if [[ ! -z "${6}" && "${#6}" > 0 ]]
+  then
+    ListThisMaxdepthParam="-maxdepth ${6}"
+
+  fi
+
+  # get list of items in directory
+  ThisItemList=$(sudo find ${ListThisDir} ${ListThisMaxdepthParam} ${ListThisTypeParam} ${ListThisFilterParam} | sort)
+
+  if [[ -n "${ThisItemList}" ]]
+  then
+    i=1
+
+    for ListThisItem in $ThisItemList
+    do
+      if [[ -L "${ListThisItem}" ]]
+      then
+        ListThisSize="[ link ]"
+
+      elif [[ "${ListThisType}" == "f" ]]
+      then
+        ListThisSize="[ $( wc -c "$ListThisItem" | awk '{print $1}' ) bytes ]"
+
+      else
+        ListThisSize="\\n${ListThisIndent}   [ has $(sudo find ${ListThisItem} -type f | wc -l) ${ListThisCountLabel}(s) ]"
+
+      fi
+
+      TempString="$( awk -v rmv="$ListThisDir" -v path="$ListThisItem" 'BEGIN{sub(rmv,"",path); print path}' )"
+      TempString="$( awk -v rmv="/" -v path="$TempString" 'BEGIN{sub(rmv,"",path); print path}' )"
+
+      if [[ "${#TempString}" -gt 1 ]]
+      then
+        ShowMessage "show" "${ListThisIndent}${i}) ${TempString} ${ListThisSize}"
+
+        i=$(($i + 1))
+
+        #REFACTOR add 'maxdepth' recursive call, calculate next depth 'ListThisIndent'
+
+      fi
+
+    done
+
+  else
+    ShowMessage "show" "-----"
+    ShowMessage "info" "----- No items found in ${ListThisDir} (list directory)"
+
+  fi
+}
+
+function LoadConfValues
+{
+  local strThisBinPath="${0}"
+  ConfigThis_bin="$( awk -v rmv="/ConfigMake" -v path="$strThisBinPath" 'BEGIN{sub(rmv,"",path); print path}' )"
+
+  if [[ ! -f "${ConfigThis_bin}/ConfigThis.conf" ]]
+  then
+    if [[ ! -f "/etc/ConfigThis/ConfigThis.conf" ]]
+    then
+      strPathConf="${ConfigThis_bin}"
+      ConfigThis_conf="${strPathConf}/ConfigThis.conf"
+      ConfigThis_share="${ConfigThis_bin}"
+    else
+      strPathConf="/etc/ConfigThis"
+      ConfigThis_conf="${strPathConf}/ConfigThis.conf"
+      ConfigThis_share="/usr/share/ConfigThis"
+    fi
+  else
+    strPathConf="${ConfigThis_bin}"
+    ConfigThis_conf="${strPathConf}/ConfigThis.conf"
+    ConfigThis_share="${ConfigThis_bin}"
+  fi
+
+  if [[ ! -f "${ConfigThis_conf}" ]]
+  then
+    ConfigThis_conf="ConfigThis.conf"
+
+    if [[ ! -f "${ConfigThis_conf}" ]]
+    then
+      # conf file not found
+      export ConfigThis_bin="\"${ConfigThis_bin}\""
+      export ConfigThis_editor="\"/usr/bin/vim\""
+      export ConfigThis_home="\"{$HOME}\""
+      export ConfigThis_share="\"/usr/share/ConfigThis\""
+      export ConfigThis_root="\"ConfigThis\""
+      export ConfigThis_owner="\"$(whoami)\""
+      export ConfigThis_group="\"$(getent group ${ConfigThis_owner}|awk 'BEGIN {FS=":"}{print $1}')\""
+      export ConfigThis_projects="\"${ConfigThis_root}\""
+      export ConfigThis_vendors="\"${ConfigThis_root}/${ConfigThis_root}/vendor\""
+      export ConfigThis_reportto="\"${ConfigThis_owner}@localhost\""
+      export ConfigThis_remoteto=\"\"
+      export ConfigThis_remoteexclude=\"\"
+      export ConfigThis_remoteport=\"\"
+      export ConfigThis_conf=\"\"
+
+    else
+      . "${ConfigThis_conf}"       # source / eval the contents of *.conf
+
+    fi
+
+  else
+    . "${ConfigThis_conf}"         # source / eval the contents of *.conf
+
+  fi
+
+  if [[ "${strPathConf}" == "${ConfigThis_bin}" ]]
+  then
+    ShowMessage "show" "----- 'ConfigThis -This' has not been executed yet"
+
+  fi
+
+}
+
+# ----------------------------------------------------------------------
+# ----------------------------------------------------------------------
+
+clear
+
+strSettings="# Note: script environment variables do NOT persist after the script exits"
+strVendor=""
+strCategory=""
+strCategoryPath=""
+strReqFile=""
+strThisBinPath=""
+strThisHomePath=""
+
+LoadConfValues
+
+#---------------------------------------------------
+#
+# display script name and parameters
+#
+ShowMessage "show" "----- ${0}"
+ShowMessage "show" "-----  ${1} ${2} ${3} ${4} ${5} ${6} ${7}"
+
+#---------------------------------------------------
+#
+# check parameter 1 for '-help'
+#
+if [[ -z "${1}" || (! -z "${1}" && ( "${1}" == "-help" || "${1}" == "--help" || "${1}" == "-Help" || "${1}" == "--Help" || "${1}" == "-h" || "${1}" == "--h"  || "${1}" == "-H" || "${1}" == "--H" )) ]]
+then
+  strPathFileHelp="${ConfigThis_share}/ConfigMake.txt"
+
+  if [[ ! -f "${strPathFileHelp}" ]]
+  then
+    if [[ ! -f "ConfigMake.txt" ]]
+    then
+      ShowMessage "err" "setup error - missing ${ConfigThis_share}/ConfigMake.txt "
+
+      exit 0
+
+    else
+      cat "ConfigMake.txt"
+
+      exit 0
+
+    fi
+
+  else
+    cat "${strPathFileHelp}"
+
+    exit 0
+
+  fi
+
+# else
+#   continue ConfigMake
+#   check for parameters -this, -default, -file, -link, -copy, -rsync
+#
+fi
+
+#---------------------------------------------------
+#
+# check parameter 1 for '-conf' - list the contents of ConfigThis.conf
+#
+if [[ -z "${1}" || (! -z "${1}" && ( "${1}" == "-conf" || "${1}" == "--conf" || "${1}" == "-Conf" || "${1}" == "--Conf" || "${1}" == "-c" || "${1}" == "--c"  || "${1}" == "-C" || "${1}" == "--C" )) ]]
+then
+  strPathConf=""
+  ConfigThis_conf=""
+  strThisBinPath="${0}"
+  ConfigThis_bin="$( awk -v rmv="/ConfigMake" -v path="$strThisBinPath" 'BEGIN{sub(rmv,"",path); print path}' )"
+
+  if [[ ! -f "${ConfigThis_bin}/ConfigThis.conf" ]]
+  then
+    if [[ -f "/etc/ConfigThis/ConfigThis.conf" ]]
+    then
+      strPathConf="/etc/ConfigThis"
+    fi
+  else
+    strPathConf="${ConfigThis_bin}"
+  fi
+
+  ConfigThis_conf="${strPathConf}/ConfigThis.conf"
+
+  if [[ ! -f "${ConfigThis_conf}" ]]
+  then
+    if [[ ! -f "ConfigThis.conf" ]]
+    then
+      ShowMessage "err" "setup error - missing ${ConfigThis_conf}"
+
+      exit 0
+
+    else
+      cat "ConfigThis.conf"
+
+      exit 0
+
+    fi
+
+  else
+    cat "${ConfigThis_conf}"
+
+    exit 0
+
+  fi
+
+fi
+
+#---------------------------------------------------
+#
+# check parameter 1 for '-this' -  template setup
+#
+if [[ ! -z "${1}" && ( "${1}" == "-This" || "${1}" == "--This" || "${1}" == "-this" || "${1}" == "--this" || "${1}" == "-t" || "${1}" == "-T" || "${1}" == "--t" || "${1}" == "--T" ) ]]
+then
+  ConfigThis_bin="/usr/local/bin"
+  strThisBinPath="${0}"
+  strThisBinPath="$( awk -v rmv="/ConfigMake" -v path="$strThisBinPath" 'BEGIN{sub(rmv,"",path); print path}' )"
+
+  if [[ -d "${ConfigThis_bin}"  && ! -L "${ConfigThis_bin}" ]]
+  then
+    if [[ -f "ConfigMake" && -f "ConfigThis" ]]
+    then
+      #REFACTOR: check if sudo already active - /var/lib/sudo timestamp file
+      ShowMessage "show" "----- If not previously provided enter the sudo root password:"
+
+      sudo cp ./ConfigThis "${ConfigThis_bin}"/ConfigThis 2>/dev/null
+      sudo chmod 775 "${ConfigThis_bin}"/ConfigThis 2>/dev/null
+
+      sudo cp ./ConfigMake "${ConfigThis_bin}"/ConfigMake 2>/dev/null
+      sudo chmod 775 "${ConfigThis_bin}"/ConfigMake 2>/dev/null
+
+    else
+      ShowMessage "show" "----- ConfigMake and ConfigThis not found in directory"
+      ShowMessage "show" "-----   ${PWD}"
+      ShowMessage "show" "-----"
+
+      if [[ -f "${ConfigThis_bin}/ConfigMake"  && -f "${ConfigThis_bin}/ConfigThis" ]]
+      then
+        ShowMessage "show" "----- ConfigMake and ConfigThis previously copied to"
+        ShowMessage "show" "-----   ${ConfigThis_bin}"
+        ShowMessage "show" "-----"
+
+        ShowMessage "show" "----- Do you want to overwrite ${ConfigThis_bin}/ConfigMake [yn]:"
+
+        read strYN
+
+        if [[ "${#strYN}" == 1 && ( "${strYN}" == "Y"  || "${strYN}" == "y" ) ]]
+        then
+          sudo cp ./ConfigThis "${ConfigThis_bin}"/ConfigThis 2>/dev/null
+          sudo chmod 775 "${ConfigThis_bin}"/ConfigThis 2>/dev/null
+
+          sudo cp ./ConfigMake "${ConfigThis_bin}"/ConfigMake 2>/dev/null
+          sudo chmod 775 "${ConfigThis_bin}"/ConfigMake 2>/dev/null
+        fi
+
+      fi
+
+      if [[ -f "${strPathConf}/ConfigThis.conf" ]]
+      then
+        ShowMessage "show" "----- Configuration settings from:"
+        ShowMessage "show" "-----   ${strPathConf}/ConfigThis.conf"
+        ShowMessage "show" "-----"
+        ShowMessage "show" "----- Includes:"
+        ShowMessage "show" "----- "
+
+        cat "${ConfigThis_conf}"
+      fi
+
+      ShowMessage "show" "-----"
+
+    fi
+
+    strSettings="${strSettings}\nexport ConfigThis_bin=\"${ConfigThis_bin}\""
+
+  else
+    strSettings="${strSettings}\n#export ConfigThis_bin=\"${ConfigThis_bin}\""
+    strSettings="${strSettings}\nexport ConfigThis_bin=\"strThisBinPath\""
+
+  fi
+
+  # home path for data files
+  if [[ ! -z "${2}" ]]
+  then
+    aStr="${2}"
+
+    # first character
+    if [[ "${aStr:0:1}" == "/" || "${aStr:0:1}" == "~" ]]
+    then
+      if [[ "${aStr:0:1}" == "~" ]]
+      then
+        aStr="${HOME}"
+      fi
+
+      # last character (-1)
+      if [[ "${aStr:(-1)}" == "/" ]]
+      then
+        # remove last character %?
+        strThisHomePath="${aStr%?}"
+
+      else
+        strThisHomePath="${aStr}"
+
+      fi
+
+    else
+      # userID home directory
+      strThisHomePath="${HOME}"
+
+    fi
+
+  else
+    strThisHomePath="${HOME}"
+
+  fi
+
+  # path for documentation files
+  if [[ ! -d "${ConfigThis_share}" ]]
+  then
+    sudo mkdir -p "${ConfigThis_share}" 2>/dev/null
+
+  fi
+
+  sudo chmod 755 "${ConfigThis_share}" 2>/dev/null
+
+  if [[ -f "ConfigThis.html" && -f "ConfigMake.txt"  && -f "ConfigThis.txt" ]]
+  then
+    sudo cp ./ConfigThis.html "${ConfigThis_share}" 2>/dev/null
+    sudo chmod 644 "${ConfigThis_share}"/ConfigThis.html 2>/dev/null
+
+    sudo cp ./ConfigMake.txt  "${ConfigThis_share}" 2>/dev/null
+    sudo chmod 644 "${ConfigThis_share}"/ConfigMake.txt 2>/dev/null
+
+    sudo cp ./ConfigThis.txt  "${ConfigThis_share}" 2>/dev/null
+    sudo chmod 644 "${ConfigThis_share}"/ConfigThis.txt 2>/dev/null
+
+  else
+    if [[ -f "${ConfigThis_share}/ConfigThis.html" && -f "${ConfigThis_share}/ConfigMake.txt"  && -f "${ConfigThis_share}/ConfigThis.txt" ]]
+    then
+      ShowMessage "show" "----- ConfigMake.txt, ConfigThis.html, and ConfigThis.txt previously copied to"
+      ShowMessage "show" "-----   ${ConfigThis_share}"
+      ShowMessage "show" "-----"
+
+      ShowMessage "show" "----- Do you want to overwrite ${ConfigThis_bin}/ConfigMake [yn]:"
+
+      read strYN
+
+      if [[ "${#strYN}" == 1 && ( "${strYN}" == "Y"  || "${strYN}" == "y" ) ]]
+      then
+        sudo cp ./ConfigThis.html "${ConfigThis_share}" 2>/dev/null
+        sudo chmod 644 "${ConfigThis_share}"/ConfigThis.html 2>/dev/null
+
+        sudo cp ./ConfigMake.txt  "${ConfigThis_share}" 2>/dev/null
+        sudo chmod 644 "${ConfigThis_share}"/ConfigMake.txt 2>/dev/null
+
+        sudo cp ./ConfigThis.txt  "${ConfigThis_share}" 2>/dev/null
+        sudo chmod 644 "${ConfigThis_share}"/ConfigThis.txt 2>/dev/null
+
+      fi
+
+    fi
+
+  fi
+
+  strSettings="${strSettings}\nexport ConfigThis_editor=\"/usr/bin/vim\""
+
+  strSettings="${strSettings}\nexport ConfigThis_home=\"${strThisHomePath}\""
+
+  strSettings="${strSettings}\nexport ConfigThis_root=\"${ConfigThis_root}\""
+
+  strSettings="${strSettings}\nexport ConfigThis_projects=\"${strThisHomePath}/${ConfigThis_root}\""
+
+  strSettings="${strSettings}\nexport ConfigThis_vendors=\"${strThisHomePath}/${ConfigThis_root}/vendor\""
+
+  strPathConf="/etc/ConfigThis"
+
+  ConfigThis_conf="${strPathConf}/ConfigThis.conf"
+
+  strSettings="${strSettings}\nexport ConfigThis_conf=\"${ConfigThis_conf}\""
+
+  strSettings="${strSettings}\nexport ConfigThis_share=\"${ConfigThis_share}\""
+
+  strSettings="${strSettings}\nexport ConfigThis_owner=\"${ConfigThis_owner}\""
+
+  strSettings="${strSettings}\nexport ConfigThis_group=\"${ConfigThis_group}\""
+
+  strSettings="${strSettings}\nexport ConfigThis_reportto=\"${ConfigThis_reportto}\""
+
+  strSettings="${strSettings}\nexport ConfigThis_remoteto=\"${ConfigThis_remoteto}\""
+
+  strSettings="${strSettings}\nexport ConfigThis_remoteexclude=\"${ConfigThis_remoteexclude}\""
+
+  strSettings="${strSettings}\nexport ConfigThis_remoteport=\"${ConfigThis_remoteport}\""
+
+  strSettings="${strSettings}\n#"
+
+  if [[ ! -f "${ConfigThis_conf}" ]]
+  then
+    if [[ ! -d "${strPathConf}" ]]
+    then
+      sudo mkdir -p "${strPathConf}" 2>/dev/null
+
+    fi
+
+    sudo chmod 775 "${strPathConf}"     2>/dev/null
+    sudo touch     "${ConfigThis_conf}" 2>/dev/null
+    sudo chmod 666 "${ConfigThis_conf}" 2>/dev/null
+
+    ShowMessage "show" "----- Create configuration file ${ConfigThis_conf}"
+    sudo echo -e "${strSettings}" > "${ConfigThis_conf}"
+
+    ShowMessage "show" "----- sudo chmod 664 ${ConfigThis_conf}"
+    sudo chmod 664 "${ConfigThis_conf}"
+    ShowMessage "show" "-----"
+
+    ShowMessage "show" "----- sudo chown ${ConfigThis_conf}"
+    sudo chown "${ConfigThis_owner}":"${ConfigThis_group}" "${ConfigThis_conf}"
+    ShowMessage "show" "-----"
+
+  else
+    ShowMessage "show" "----- Do you want to overwrite ${ConfigThis_conf} [yn]:"
+
+    read strYN
+
+    if [[ "${#strYN}" == 1 && ( "${strYN}" == "Y"  || "${strYN}" == "y" ) ]]
+    then
+      sudo unlink    "${ConfigThis_conf}" 2>/dev/null
+      sudo touch     "${ConfigThis_conf}" 2>/dev/null
+      sudo chmod 666 "${ConfigThis_conf}" 2>/dev/null
+
+      ShowMessage "show" "----- Create configuration file ${ConfigThis_conf}"
+      sudo echo -e "${strSettings}" > "${ConfigThis_conf}"
+
+      ShowMessage "show" "----- sudo chmod 664 ${ConfigThis_conf}"
+      sudo chmod 664 "${ConfigThis_conf}"
+      ShowMessage "show" "-----"
+
+      ShowMessage "show" "----- sudo chown ${ConfigThis_conf}"
+      sudo chown "${ConfigThis_owner}":"${ConfigThis_group}" "${ConfigThis_conf}"
+      ShowMessage "show" "-----"
+
+    else
+      ShowMessage "show" "----- Did NOT overwrite ${ConfigThis_conf}"
+      ShowMessage "show" "-----"
+
+    fi
+
+  fi
+
+  MakeBossssDirs "${ConfigThis_root}"
+
+  ShowMessage "show" "-----"
+  ShowMessage "show" "----- touch rsync-excludes.txt - used with -rsync"
+
+  touch "${ConfigThis_home}/${ConfigThis_root}/rsync-excludes.txt" 2>/dev/null
+  sudo chown "${ConfigThis_owner}":"${ConfigThis_group}" "${ConfigThis_home}/${ConfigThis_root}/rsync-excludes.txt" 2>/dev/null
+  sudo chmod 660 "${ConfigThis_home}/${ConfigThis_root}/rsync-excludes.txt" 2>/dev/null
+
+  ShowMessage "show" "----- ${ConfigThis_bin}/ConfigMake and ConfigThis"
+  sudo ls -la "${ConfigThis_bin}"   | grep " \.$"
+  sudo ls -la "${ConfigThis_bin}"   | grep "ConfigMake"
+  sudo ls -la "${ConfigThis_bin}"   | grep "ConfigThis"
+
+  ShowMessage "show" "----- ${ConfigThis_share}"
+  sudo ls -la "${ConfigThis_share}" | grep " \.$"
+  sudo ls -la "${ConfigThis_share}" | grep "ConfigMake"
+  sudo ls -la "${ConfigThis_share}" | grep "ConfigThis"
+
+  ShowMessage "show" "----- ${strPathConf}"
+  sudo ls -la "${strPathConf}"  | grep " \.$"
+  sudo ls -la "${strPathConf}"  | grep "ConfigThis"
+
+  ShowMessage "show" "-----"
+  ShowMessage "show" "----- Contents of ${ConfigThis_conf}"
+  ShowMessage "show" "-----   Edit and save as needed"
+  cat "${ConfigThis_conf}"
+
+  #---------------------------------------------------
+  #
+  # source the ConfigThis.conf file to set bash environment variables
+  #
+  . "${ConfigThis_conf}"
+
+  ShowMessage "show" "-----"
+  ShowMessage "show" "----- Edit the conf file"
+  ShowMessage "show" "-----   vim ${ConfigThis_conf}"
+  ShowMessage "show" "-----"
+  ShowMessage "show" "----- Execute either of the following to create project directories"
+  ShowMessage "show" "-----   ConfigMake -default"
+  ShowMessage "show" "-----   ConfigMake -project aProject aPlatform aVersion"
+  ShowMessage "show" "-----     creates  ${ConfigThis_projects}/aProject/aPlatform_aVersion/"
+  ShowMessage "show" "-----"
+
+  exit 0
+fi
+
+#---------------------------------------------------
+#
+# check parameter 1 for '-rsync' - rsync to user@domain:/path/
+#
+if [[ ! -z "${1}" && ( "${1}" == "-Rsync" || "${1}" == "--Rsync" || "${1}" == "-rsync" || "${1}" == "--rsync" ) ]]
+then
+  if [[ ! -z "${2}" && ! -z "${3}" ]]
+  then
+    aStr="${2}"
+
+    if [[ "${aStr:0:1}" == "-" ]]
+    then
+      if [[ "${2}" == "-project" ]]
+      then
+        ShowMessage "show" "Project    : ${3}"
+
+        strRsyncPath="${ConfigThis_root}/${3}"
+
+      else
+        ShowMessage "show" "Vendor     : ${3}"
+
+        strRsyncPath="${ConfigThis_root}/vendor/${3}"
+
+      fi
+
+      if [[ -d "${strRsyncPath}" && ! -L "${strRsyncPath}" ]]
+      then
+        ShowMessage "show" "-----"
+        ShowMessage "info" "----- rsync ${2} ${3} to ${ConfigThis_remoteto}"
+
+        if [[ -f "${ConfigThis_remoteexclude}" ]]
+        then
+          ShowMessage "show" "-----"
+          ShowMessage "show" "----- rsync -vrazuWP -e \"ssh -p ${ConfigThis_remoteport}\" --no-i-r --exclude-from ${ConfigThis_remoteexclude}  \"${ConfigThis_home}/${strRsyncPath}/\" \"${ConfigThis_remoteto}/${strRsyncPath}\" "
+
+          cat "${ConfigThis_remoteexclude}"
+
+          ShowMessage "show" " "
+
+          rsync -vrazuWP -e "ssh -p ${ConfigThis_remoteport}" --no-i-r --exclude-from="${ConfigThis_remoteexclude}" --include="*/" --include="*" "${ConfigThis_home}/${strRsyncPath}/" "${ConfigThis_remoteto}/${strRsyncPath}"
+
+        else
+          ShowMessage "show" "-----"
+          ShowMessage "show" "----- do not exclude any items"
+
+          rsync -vrazuWP -e "ssh -p ${ConfigThis_remoteport}" --no-i-r --include="*/"                                              --include="*" "${ConfigThis_home}/${strRsyncPath}/" "${ConfigThis_remoteto}/${strRsyncPath}"
+
+        fi
+
+        ShowMessage "show" "-----"
+
+        exit 0
+
+      else
+        ShowMessage "show" "-----"
+        ShowMessage "info" "----- ${strRsyncPath} not a valid directory"
+
+      fi
+
+    fi
+
+  fi
+
+  ShowMessage "show" " "
+  ShowMessage "show" "One or more parameters not provided"
+  ShowMessage "show" "[2] [ option   ] ${2}  // -project or -vendor"
+  ShowMessage "show" "[3] [ directory] ${3}  // aProject or aVendor"
+  ShowMessage "show" "-----"
+
+  exit 0
+fi
+
+#---------------------------------------------------
+#
+# check parameter 1 for '-vendors' - list vendors
+#
+if [[ ! -z "${1}" && ( "${1}" == "-Vendors" || "${1}" == "--Vendors" || "${1}" == "-vendors" || "${1}" == "--vendors" ) ]]
+then
+  ShowMessage "show" "----- List of vendors"
+
+  #ListDirectory "path" "f" "name" "indent" "label" "1"
+  ListDirectory "${ConfigThis_vendors}" "d" "" "      " "vendor" "1"
+
+  ShowMessage "show" "-----"
+  ShowMessage "show" "----- Next:"
+  ShowMessage "show" "-----   List all vendor executable file categories and files/counts:"
+  ShowMessage "show" "-----     ConfigMake -vendor aVendor"
+  ShowMessage "show" "-----"
+  ShowMessage "show" "-----   List all vendor executable files:"
+  ShowMessage "show" "-----     ConfigMake -files aVendor  | less"
+  ShowMessage "show" "-----     ConfigMake -files aVendor aCategory | less"
+  ShowMessage "show" "-----       aCategory valid values: 1000, 2000, 3000, ...9000"
+  ShowMessage "show" "-----       | less // Note: this option supports paging of output"
+  ShowMessage "show" "-----"
+  ShowMessage "show" "-----   Create a new vendor:"
+  ShowMessage "show" "-----     ConfigMake -vendor aVendor"
+  ShowMessage "show" "-----       aCategory valid values: 1000, 2000, 3000, ...9000"
+  ShowMessage "show" "-----"
+  ShowMessage "show" "-----   Create a new vendor executable file:"
+  ShowMessage "show" "-----     ConfigMake -file aFile aVendor aCategory"
+  ShowMessage "show" "-----       aCategory valid values: 1000, 2000, 3000, ...9000"
+  ShowMessage "show" "-----"
+  ShowMessage "show" "-----   List all projects:"
+  ShowMessage "show" "-----     ConfigMake -projects"
+  ShowMessage "show" "-----"
+
+  exit 0
+fi
+
+#---------------------------------------------------
+#
+# check parameter 1 for '-projects' - list projects
+#
+if [[ ! -z "${1}" && ( "${1}" == "-Projects" || "${1}" == "--Projects" || "${1}" == "-projects" || "${1}" == "--projects" ) ]]
+then
+  ShowMessage "show" "----- List of projects"
+
+  #ListDirectory "path" "f" "name" "indent" "label" "1"
+  ListDirectory "${ConfigThis_projects}" "d" "!vendor" "      " "platform-version" "1"
+
+  ShowMessage "show" "-----"
+  ShowMessage "show" "----- Next:"
+  ShowMessage "show" "-----   List all project link categories and links/counts:"
+  ShowMessage "show" "-----     ConfigMake -project aProject"
+  ShowMessage "show" "-----"
+  ShowMessage "show" "-----   List project links:"
+  ShowMessage "show" "-----     ConfigMake -links aProject | less"
+  ShowMessage "show" "-----     ConfigMake -links aProject aPlatform aVersion | less"
+  ShowMessage "show" "-----       | less // Note: this option supports paging of output"
+  ShowMessage "show" "-----"
+  ShowMessage "show" "-----   List all vendors:"
+  ShowMessage "show" "-----     ConfigMake -vendors"
+
+  ShowMessage "show" "-----"
+
+  exit 0
+fi
+
+#---------------------------------------------------
+#
+# check parameter 1 for '-files' - list vendor executable files
+# check parameter 2, 3 for 'aVendor' 'aCategory'
+#
+if [[ ! -z "${1}" && ( "${1}" == "-Files" || "${1}" == "--Files" || "${1}" == "-files" || "${1}" == "--files" ) ]]
+then
+  strVendorPath=""
+  strCategoryPath=""
+
+  if [[ ! -z "${2}" ]]
+  then
+    strVendorPath="${ConfigThis_vendors}/${2}"
+
+    #REFACTOR employ ListDirectory function - add -recursive flag
+    if [[ -d "${strVendorPath}" && ! -L "${strVendorPath}" ]]
+    then
+      ShowMessage "show" "----- List of executable file categories and files/counts in ${2} ${3}"
+
+      ThisPathList=$(sudo find ${strVendorPath} -maxdepth 1 -type d -name "config*" | sort)
+
+      # The variable 'ThisPathList' contains a sorted list of matching path names
+      #
+      if [[ -n "${ThisPathList}" ]]
+      then
+        i=1
+
+        ShowMessage "show" "${2}"
+
+        if [[ ! -z "${3}" ]]
+        then
+          strCategoryPath="${3}"
+        fi
+
+        for ThisPath in $ThisPathList
+        do
+          if [[ -d "${ThisPath}" && ! -L "${ThisPath}" && -x "${ThisPath}" ]]
+          then
+            TempString="$( awk -v rmv="$strVendorPath" -v path="$ThisPath" 'BEGIN{sub(rmv,"",path); print path}' )"
+            TempString="$( awk -v rmv="/" -v path="$TempString" 'BEGIN{sub(rmv,"",path); print path}' )"
+
+            if [[ "${#TempString}" -gt 1 ]]
+            then
+              if [[ "${#strCategoryPath}" -eq 0 || ( "${#strCategoryPath}" -gt 1 && "${TempString:7:4}" == "${strCategoryPath}" ) ]]
+              then
+                ShowMessage "show" "  ${i}) ${TempString}"
+
+                i=$(($i + 1))
+
+                ThisFileList=$(sudo find ${ThisPath} -type f -executable | sort)
+
+                if [[ -n "${ThisFileList}" ]]
+                then
+                  j=1
+
+                  for ThisFile in $ThisFileList
+                  do
+                    if [[ -x "${ThisFile}" ]]
+                    then
+                      TempString="$( awk -v rmv="$ThisPath" -v path="$ThisFile" 'BEGIN{sub(rmv,"",path); print path}' )"
+                      TempString="$( awk -v rmv="/" -v path="$TempString" 'BEGIN{sub(rmv,"",path); print path}' )"
+
+                      if [[ "${#TempString}" -gt 1 ]]
+                      then
+                        ShowMessage "show" "     ${j}) ${TempString}"
+                        j=$(($j + 1))
+
+                      fi
+
+                    fi
+
+                  done
+
+                fi
+
+              fi
+
+            fi
+
+          fi
+
+        done
+
+      fi
+
+    fi
+
+  else
+    ShowMessage "show" " "
+    ShowMessage "show" "One or more parameters are not valid"
+    ShowMessage "show" "[2] [ vendor   ] ${2}"
+    ShowMessage "show" "[3] [ category ] ${3}"
+    ShowMessage "show" " "
+
+    exit 0
+
+  fi
+
+  ShowMessage "show" "-----"
+  ShowMessage "show" "----- Next:"
+  ShowMessage "show" "-----   Create or edit a vendor executable file:"
+  ShowMessage "show" "-----     ConfigMake -file aFile aVendor aCategory"
+  ShowMessage "show" "-----       aCategory valid values: 1000, 2000, 3000, ...9000"
+  ShowMessage "show" "-----"
+  ShowMessage "show" "-----   List all projects:"
+  ShowMessage "show" "-----     ConfigMake -projects"
+  ShowMessage "show" "-----"
+  ShowMessage "show" "-----   List all project link categories and links/counts:"
+  ShowMessage "show" "-----     ConfigMake -project aProject"
+  ShowMessage "show" "-----"
+  ShowMessage "show" "-----   List project links:"
+  ShowMessage "show" "-----     ConfigMake -links aProject | less"
+  ShowMessage "show" "-----     ConfigMake -links aProject aPlatform aVersion | less"
+  ShowMessage "show" "-----       | less // Note: this option supports paging of output"
+  ShowMessage "show" "-----"
+  ShowMessage "show" "-----   Create a project link:"
+  ShowMessage "show" "-----     ConfigMake -link aFile aVendor aCategory aProject aPlatform aVersion"
+  ShowMessage "show" "-----       aCategory valid values: 1000, 2000, 3000, ...9000"
+
+  exit 0
+
+fi
+
+#---------------------------------------------------
+#
+# check parameter 1 for '-vendor' - create new vendor directory
+#
+if [[ ! -z "${1}" && ( "${1}" == "-Vendor" || "${1}" == "--Vendor" || "${1}" == "-vendor" || "${1}" == "--vendor" || "${1}" == "-v" || "${1}" == "-V" || "${1}" == "--v" || "${1}" == "--V" ) ]]
+then
+  if [[ ! -z "${2}" ]]
+  then
+    #REFACTOR employ ListDirectory function - add -recursive flag
+    if [[ -d "${ConfigThis_vendors}/${2}" && ! -L "${ConfigThis_vendors}/${2}" ]]
+    then
+      ShowMessage "show" "----- List of executable file categories and files/counts"
+
+      strVendorPath="${ConfigThis_vendors}/${2}"
+
+      ThisPathList=$(sudo find ${strVendorPath} -maxdepth 1 -type d -name "config*" | sort)
+
+      # The variable 'ThisPathList' contains a sorted list of matching path names
+      #
+      if [[ -n "${ThisPathList}" ]]
+      then
+        i=1
+
+        ShowMessage "show" "${2}"
+
+        for ThisPath in $ThisPathList
+        do
+          if [[ -d "${ThisPath}" && ! -L "${ThisPath}" && -x "${ThisPath}" ]]
+          then
+            TempString="$( awk -v rmv="$strVendorPath" -v path="$ThisPath" 'BEGIN{sub(rmv,"",path); print path}' )"
+            TempString="$( awk -v rmv="/" -v path="$TempString" 'BEGIN{sub(rmv,"",path); print path}' )"
+
+            if [[ "${#TempString}" -gt 1 ]]
+            then
+              ShowMessage "show" "  ${i}) ${TempString}"
+
+              i=$(($i + 1))
+
+              ThisFileList=$(sudo find ${ThisPath} -type f -executable | sort)
+
+              ThisFileCount=$(sudo find ${ThisPath} -type f -executable | wc -l)
+
+              if [[ -n "${ThisFileList}" ]]
+              then
+                ShowMessage "show" "     [ has ${ThisFileCount} file(s) ]"
+
+              fi
+
+            fi
+
+          fi
+
+        done
+
+      fi
+
+      ShowMessage "show" "-----"
+      ShowMessage "show" "----- Next:"
+      ShowMessage "show" "-----   List all vendor executable files:"
+      ShowMessage "show" "-----     ConfigMake -files aVendor  | less"
+      ShowMessage "show" "-----     ConfigMake -files aVendor aCategory | less"
+      ShowMessage "show" "-----       aCategory valid values: 1000, 2000, 3000, ...9000"
+      ShowMessage "show" "-----       | less // Note: this option supports paging of output"
+      ShowMessage "show" "-----"
+      ShowMessage "show" "-----   Create or edit a vendor executable file:"
+      ShowMessage "show" "-----     ConfigMake -file aFile aVendor aCategory"
+      ShowMessage "show" "-----       aCategory valid values: 1000, 2000, 3000, ...9000"
+      ShowMessage "show" "-----"
+      ShowMessage "show" "-----   List all projects:"
+      ShowMessage "show" "-----     ConfigMake -projects"
+      ShowMessage "show" "-----"
+      ShowMessage "show" "-----   List all project link categories and links/counts:"
+      ShowMessage "show" "-----     ConfigMake -project aProject"
+      ShowMessage "show" "-----"
+      ShowMessage "show" "-----   Create a project link:"
+      ShowMessage "show" "-----     ConfigMake -link aFile aVendor aCategory aProject aPlatform aVersion"
+      ShowMessage "show" "-----       aCategory valid values: 1000, 2000, 3000, ...9000"
+
+    else
+      ShowMessage "show" "-----"
+      ShowMessage "show" "----- Create a new vendor: ${2}"
+
+      MakeVendorDirs "${ConfigThis_projects}" "${2}"
+
+      ShowMessage "show" "-----"
+      ShowMessage "show" "----- chown ${ConfigThis_owner}:${ConfigThis_group} recursively"
+
+      #REFACTOR: check if sudo already active - /var/lib/sudo timestamp file
+      ShowMessage "show" "-----"
+      ShowMessage "show" "----- If not previously provided enter the sudo root password:"
+
+      sudo chown "${ConfigThis_owner}":"${ConfigThis_group}" "${ConfigThis_vendors}" 2>/dev/null
+      sudo chown -R "${ConfigThis_owner}":"${ConfigThis_group}" "${ConfigThis_vendors}/${2}" 2>/dev/null
+
+      ShowMessage "show" "-----"
+      ShowMessage "show" "----- chmod 770 recursively"
+
+      sudo chmod -R 770 "${ConfigThis_vendors}/${2}" 2>/dev/null
+      sudo chmod    770 "${ConfigThis_vendors}/${2}" 2>/dev/null
+
+      ShowMessage "show" "-----"
+      ShowMessage "show" "----- Next:"
+      ShowMessage "show" "-----   List all vendors:"
+      ShowMessage "show" "-----     ConfigMake -vendors"
+      ShowMessage "show" "-----"
+      ShowMessage "show" "-----   List all vendor executable files:"
+      ShowMessage "show" "-----     ConfigMake -files aVendor  | less"
+      ShowMessage "show" "-----     ConfigMake -files aVendor aCategory | less"
+      ShowMessage "show" "-----       aCategory valid values: 1000, 2000, 3000, ...9000"
+      ShowMessage "show" "-----       | less // Note: this option supports paging of output"
+      ShowMessage "show" "-----"
+      ShowMessage "show" "-----   Create or edit a vendor executable file:"
+      ShowMessage "show" "-----     ConfigMake -file aFile aVendor aCategory"
+      ShowMessage "show" "-----       aCategory valid values: 1000, 2000, 3000, ...9000"
+    fi
+
+  else
+    ShowMessage "show" " "
+    ShowMessage "show" "One or more parameters not provided"
+    ShowMessage "show" "[2] [ vendor   ] ${2}"
+
+  fi
+
+  ShowMessage "show" "-----"
+
+  exit 0
+fi
+
+#---------------------------------------------------
+#
+# check parameter 1 for '-show' - show executable file
+#
+if [[ ! -z "${1}" && ( "${1}" == "-Show" || "${1}" == "--Show" || "${1}" == "-show" || "${1}" == "--show" || "${1}" == "-s" || "${1}" == "-S" || "${1}" == "--s" || "${1}" == "--S" ) ]]
+then
+  ShowMessage "show" "----- Show the executable file contents:"
+
+  if [[ ! -z "${2}" ]]
+  then
+    ShowMessage "show" "File       : ${2}"
+
+    strReqFile="${2}"
+
+    if [[ ! -z "${3}" || "${strReqFile:0:1}" == "/" ]]
+    then
+      ShowMessage "show" "Vendor     : ${3}"
+
+      if [[ "${strReqFile:0:1}" != "/" ]]
+      then
+        strVendor="${3}"
+
+        if [[ ! -z "${4}" ]]
+        then
+          strCategory="${4}"
+
+        else
+          strCategory=1000
+
+        fi
+
+        strCategoryPath="$(GetCategoryPathFromCode ${strCategory})"
+
+        ShowMessage "show" "Cate Path  : ${strCategoryPath}"
+
+        if [[ "${#strCategoryPath}" -gt 1 ]]
+        then
+          ShowMessage "show" "Category   : ${strCategoryPath}"
+
+          if [[ ! -z "${strReqFile}" ]]
+          then
+            ShowMessage "show" "-----"
+
+            if [[ -w "${ConfigThis_vendors}/${strVendor}/${strCategoryPath}/${strReqFile}" ]]
+            then
+              ShowMessage "show" "----- Show the executable file"
+
+              ShowMessage "show" "-----"
+
+              cat "${ConfigThis_vendors}/${strVendor}/${strCategoryPath}/${strReqFile}" | less
+
+              ShowMessage "show" "-----"
+
+              ShowMessage "show" "----- Do you want to edit the file now [yn]:"
+
+              read strYN
+
+              if [[ "${#strYN}" == 1 && ( "${strYN}" == "Y"  || "${strYN}" == "y" ) ]]
+              then
+
+                ShowMessage "show" "----- Load editor ${ConfigThis_editor}"
+
+                "${ConfigThis_editor}" "${ConfigThis_vendors}/${strVendor}/${strCategoryPath}/${strReqFile}" 2>/dev/null
+
+                ShowMessage "show" "----- List file"
+
+                ShowMessage "show" "-----"
+
+                #ListDirectory "path" "f" "name" "indent" "label" "1"
+                ListDirectory "${ConfigThis_vendors}/${strVendor}/${strCategoryPath}" "f" "${strReqFile}" " " "executable" "1"
+
+                ShowMessage "show" "-----"
+                ShowMessage "show" "----- Next:"
+                ShowMessage "show" "-----   List all vendors:"
+                ShowMessage "show" "-----     ConfigMake -vendors"
+                ShowMessage "show" "-----"
+                ShowMessage "show" "-----   List all vendor executable files:"
+                ShowMessage "show" "-----     ConfigMake -files aVendor  | less"
+                ShowMessage "show" "-----     ConfigMake -files aVendor aCategory | less"                ShowMessage "show" "-----       | less // Note: this option supports paging of output"
+                ShowMessage "show" "-----       aCategory valid values: 1000, 2000, 3000, ...9000"
+                ShowMessage "show" "-----       | less // Note: this option supports paging of output"
+                ShowMessage "show" "-----"
+
+                exit 0
+
+              else
+                ShowMessage "show" "-----"
+                ShowMessage "show" "Editting   : deferred to a later time"
+                ShowMessage "show" "-----"
+
+                exit 0
+
+              fi
+
+            else
+              ShowMessage "show" "-----"
+              ShowMessage "info" "File      : can not read/write ${ConfigThis_vendors}/${strVendor}/${strCategoryPath}/${strReqFile}"
+              ShowMessage "show" "-----"
+
+              exit 0
+
+            fi
+
+          else
+            ShowMessage "show" "-----"
+            ShowMessage "info" "File      : not provided"
+
+          fi
+
+        else
+          ShowMessage "show" "-----"
+          ShowMessage "info" "Category  : not provided"
+
+        fi
+
+      else
+        if [[ -w "${strReqFile}" ]]
+        then
+          ShowMessage "show" "----- Show the executable file"
+
+          ShowMessage "show" "-----"
+
+          cat "${strReqFile}"
+
+          ShowMessage "show" "-----"
+
+          ShowMessage "show" "----- Do you want to edit the file now [yn]:"
+
+          read strYN
+
+          if [[ "${#strYN}" == 1 && ( "${strYN}" == "Y"  || "${strYN}" == "y" ) ]]
+          then
+
+            ShowMessage "show" "----- ${strReqFile}"
+
+            "${ConfigThis_editor}" "${strReqFile}" 2>/dev/null
+
+            #REFACTOR ListDirectory "path" "f" "name" "indent" "label" "1"
+            #~~~ split out filename from path string
+            ls -la "${strReqFile}"
+
+            ShowMessage "show" "-----"
+            ShowMessage "show" "----- Next:"
+            ShowMessage "show" "-----   List all vendors:"
+            ShowMessage "show" "-----     ConfigMake -vendors"
+            ShowMessage "show" "-----"
+            ShowMessage "show" "-----   List all vendor executable files:"
+            ShowMessage "show" "-----     ConfigMake -files aVendor  | less"
+            ShowMessage "show" "-----     ConfigMake -files aVendor aCategory | less"
+            ShowMessage "show" "-----       aCategory valid values: 1000, 2000, 3000, ...9000"
+            ShowMessage "show" "-----       | less // Note: this option supports paging of output"
+            ShowMessage "show" "-----"
+
+            exit 0
+
+          else
+            ShowMessage "show" "-----"
+            ShowMessage "show" "Editting   : deferred to a later time"
+            ShowMessage "show" "-----"
+
+            exit 0
+
+          fi
+
+        else
+          ShowMessage "show" "-----"
+          ShowMessage "info" "File       : can not read/write ${strReqFile}"
+
+          #REFACTOR ListDirectory "path" "f" "name" "indent" "label" "1"
+          #~~~ split out filename from path string
+          ls -la "${strReqFile}"
+
+          ShowMessage "show" "-----"
+
+          exit 0
+
+        fi
+
+      fi
+
+    else
+      ShowMessage "show" "-----"
+      ShowMessage "info" "Vendor     : not specified"
+
+    fi
+
+  else
+    ShowMessage "show" "-----"
+    ShowMessage "info" "File      : not specified"
+
+  fi
+
+  if [[ -z "${4}" ]]
+  then
+    ShowMessage "show" " "
+    ShowMessage "show" "One or more parameters not provided"
+    ShowMessage "show" "[2] [ file     ] ${2}"
+    ShowMessage "show" "[3] [ vendor   ] ${3}"
+    ShowMessage "show" "[4] [ category ] ${4}"
+
+  fi
+
+  ShowMessage "show" "-----"
+
+  exit 0
+
+fi
+
+#---------------------------------------------------
+#
+# check parameter 1 for '-file' - list or create a vendor executable file
+#
+if [[ ! -z "${1}" && ( "${1}" == "-File" || "${1}" == "--File" || "${1}" == "-file" || "${1}" == "--file" || "${1}" == "-f" || "${1}" == "-F" || "${1}" == "--f" || "${1}" == "--F" ) ]]
+then
+  ShowMessage "show" "----- Create the new executable file:"
+
+  if [[ ! -z "${2}" ]]
+  then
+    ShowMessage "show" "File       : ${2}"
+
+    strReqFile="${2}"
+
+    if [[ ! -z "${3}" || "${strReqFile:0:1}" == "/" ]]
+    then
+      ShowMessage "show" "Vendor     : ${3}"
+
+      if [[ "${strReqFile:0:1}" != "/" ]]
+      then
+        strVendor="${3}"
+
+        if [[ ! -d "${ConfigThis_vendors}/${strVendor}"  || -L "${ConfigThis_vendors}/${strVendor}" ]]
+        then
+          ShowMessage "info" "Vendor     : not a valid path"
+          ShowMessage "info" "Vendor     :   ${ConfigThis_vendors}/${strVendor}"
+
+          exit 0
+
+        fi
+
+        if [[ ! -z "${4}" ]]
+        then
+          strCategory="${4}"
+
+        else
+          strCategory=1000
+
+        fi
+
+        strCategoryPath="$(GetCategoryPathFromCode ${strCategory})"
+
+        ShowMessage "show" "Cate Path  : ${strCategoryPath}"
+
+        if [[ "${#strCategoryPath}" -gt 1 ]]
+        then
+          ShowMessage "show" "Category   : ${strCategoryPath}"
+
+          if [[ ! -z "${strReqFile}" ]]
+          then
+            ShowMessage "show" "-----"
+
+            ShowMessage "show" "----- make directory structure ${strVendor}/${strCategoryPath}"
+
+            mkdir -p  "${ConfigThis_vendors}/${strVendor}/${strCategoryPath}" 2>/dev/null
+
+            ShowMessage "show" "----- create file ${strReqFile}"
+
+            touch     "${ConfigThis_vendors}/${strVendor}/${strCategoryPath}/${strReqFile}" 2>/dev/null
+
+            if [[ -w "${ConfigThis_vendors}/${strVendor}/${strCategoryPath}/${strReqFile}" ]]
+            then
+              chmod 770 "${ConfigThis_vendors}/${strVendor}/${strCategoryPath}/${strReqFile}" 2>/dev/null
+
+              ShowMessage "show" "----- List the executable file"
+
+              ShowMessage "show" "-----"
+
+              #ListDirectory "path" "f" "name" "indent" "label" "1"
+              ListDirectory "${ConfigThis_vendors}/${strVendor}/${strCategoryPath}" "f" "${strReqFile}" "-----   " "executable" "1"
+
+              ShowMessage "show" "----- Do you want to edit the file now [yn]:"
+
+              read strYN
+
+              if [[ "${#strYN}" == 1 && ( "${strYN}" == "Y"  || "${strYN}" == "y" ) ]]
+              then
+
+                ShowMessage "show" "----- Load editor ${ConfigThis_editor}"
+
+                "${ConfigThis_editor}" "${ConfigThis_vendors}/${strVendor}/${strCategoryPath}/${strReqFile}" 2>/dev/null
+
+                ShowMessage "show" "----- List file"
+
+                ShowMessage "show" "-----"
+
+                #ListDirectory "path" "f" "name" "indent" "label" "1"
+                ListDirectory "${ConfigThis_vendors}/${strVendor}/${strCategoryPath}" "f" "${strReqFile}" "-----   " "executable" "1"
+
+                ShowMessage "show" "-----"
+                ShowMessage "show" "----- Next:"
+                ShowMessage "show" "-----   List all vendors:"
+                ShowMessage "show" "-----     ConfigMake -vendors"
+                ShowMessage "show" "-----"
+                ShowMessage "show" "-----   List all vendor executable files:"
+                ShowMessage "show" "-----     ConfigMake -files aVendor  | less"
+                ShowMessage "show" "-----     ConfigMake -files aVendor aCategory | less"
+                ShowMessage "show" "-----       aCategory valid values: 1000, 2000, 3000, ...9000"
+                ShowMessage "show" "-----       | less // Note: this option supports paging of output"
+                ShowMessage "show" "-----"
+
+                exit 0
+
+              else
+                ShowMessage "show" "-----"
+                ShowMessage "show" "Editting   : deferred to a later time"
+                ShowMessage "show" "-----"
+
+                exit 0
+
+              fi
+
+            else
+              ShowMessage "show" "-----"
+              ShowMessage "info" "File      : can not read/write ${ConfigThis_vendors}/${strVendor}/${strCategoryPath}/${strReqFile}"
+              ShowMessage "show" "-----"
+
+              exit 0
+
+            fi
+
+          else
+            ShowMessage "show" "-----"
+            ShowMessage "info" "File      : not provided"
+
+          fi
+
+        else
+          ShowMessage "show" "-----"
+          ShowMessage "info" "Category  : not provided"
+
+        fi
+
+      else
+        ShowMessage "show" "-----"
+        ShowMessage "show" "----- touch ${strReqFile}"
+
+        touch     "${strReqFile}" 2>/dev/null
+
+        if [[ -w "${strReqFile}" ]]
+        then
+          chmod 770 "${strReqFile}" 2>/dev/null
+
+          ShowMessage "show" "----- List the executable file (ls -la)"
+          ShowMessage "show" "-----"
+
+          #REFACTOR ListDirectory "path" "f" "name" "indent" "label" "1"
+          #~~~ split out filename from path string
+          ls -la "${strReqFile}"
+
+          ShowMessage "show" "-----"
+          ShowMessage "show" "----- Do you want to edit the file now [yn]:"
+
+          read strYN
+
+          if [[ "${#strYN}" == 1 && ( "${strYN}" == "Y"  || "${strYN}" == "y" ) ]]
+          then
+
+            ShowMessage "show" "----- Load editor ${ConfigThis_editor}"
+
+            "${ConfigThis_editor}" "${strReqFile}" 2>/dev/null
+
+            ShowMessage "show" "----- List file"
+            ShowMessage "show" "-----"
+
+            #REFACTOR ListDirectory "path" "f" "name" "indent" "label" "1"
+            #~~~ split out filename from path string
+            ls -la "${strReqFile}"
+
+            ShowMessage "show" "-----"
+            ShowMessage "show" "----- Next:"
+            ShowMessage "show" "-----   Show contents of file:"
+            ShowMessage "show" "-----     ConfigMake -show aFile aVendor aCategory"
+            ShowMessage "show" "-----"
+            ShowMessage "show" "-----   List all vendors:"
+            ShowMessage "show" "-----     ConfigMake -vendors"
+            ShowMessage "show" "-----"
+            ShowMessage "show" "-----   List all vendor executable files:"
+            ShowMessage "show" "-----     ConfigMake -files aVendor  | less"
+            ShowMessage "show" "-----     ConfigMake -files aVendor aCategory | less"
+            ShowMessage "show" "-----       aCategory valid values: 1000, 2000, 3000, ...9000"
+            ShowMessage "show" "-----       | less // Note: this option supports paging of output"
+            ShowMessage "show" "-----"
+
+            exit 0
+
+          else
+            ShowMessage "show" "-----"
+            ShowMessage "show" "Editting   : deferred to a later time"
+            ShowMessage "show" "-----"
+
+            exit 0
+
+          fi
+
+        else
+          ShowMessage "show" "-----"
+          ShowMessage "info" "File       : can not read/write ${strReqFile}"
+
+          #REFACTOR ListDirectory "path" "f" "name" "indent" "label" "1"
+          #~~~ split out filename from path string
+          ls -la "${strReqFile}"
+
+          ShowMessage "show" "-----"
+
+          exit 0
+
+        fi
+
+      fi
+
+    else
+      ShowMessage "show" "-----"
+      ShowMessage "info" "Vendor     : not specified"
+
+    fi
+
+  else
+    ShowMessage "show" "-----"
+    ShowMessage "info" "File      : not specified"
+
+  fi
+
+  if [[ -z "${4}" ]]
+  then
+    ShowMessage "show" " "
+    ShowMessage "show" "One or more parameters not provided"
+    ShowMessage "show" "[2] [ file     ] ${2}"
+    ShowMessage "show" "[3] [ vendor   ] ${3}"
+    ShowMessage "show" "[4] [ category ] ${4} (defaults to 1000)"
+
+  fi
+
+  ShowMessage "show" "-----"
+
+  exit 0
+
+fi
+
+#---------------------------------------------------
+#
+# check parameter 1 for '-link' - create a project aLink to an existing executable file aReqFile
+#
+if [[ ! -z "${1}" && ( "${1}" == "-Link" || "${1}" == "--Link" || "${1}" == "-link" || "${1}" == "--link" || "${1}" == "-l" || "${1}" == "-L" || "${1}" == "--l" || "${1}" == "--L" ) ]]
+then
+  if [[ -z "${6}" || -z "${7}" ]]
+  then
+    ShowMessage "show" " "
+    ShowMessage "show" "One or more parameters not provided"
+    ShowMessage "show" "[2] [ vendorfile or -all  ] ${2}"
+    ShowMessage "show" "[3] [ vendor              ] ${3}"
+    ShowMessage "show" "[4] [ category            ] ${4}"
+    ShowMessage "show" "[5] [ project             ] ${5}"
+    ShowMessage "show" "[6] [ platform            ] ${6}"
+    ShowMessage "show" "[7] [ version             ] ${7}"
+    ShowMessage "show" "-----"
+    ShowMessage "show" "----- OR"
+    ShowMessage "show" "-----"
+    ShowMessage "show" "[2] [ /pathfile    ] ${2}"
+    ShowMessage "show" "[3] [ category     ] ${3}"
+    ShowMessage "show" "[4] [ project      ] ${4}"
+    ShowMessage "show" "[5] [ platform     ] ${5}"
+    ShowMessage "show" "[6] [ version      ] ${6}"
+    ShowMessage "show" "-----"
+
+    exit 0
+
+  fi
+
+  if [[ ! -z "${2}" ]]
+  then
+
+    ShowMessage "show" "-----"
+
+    strVendorFile="${2}"
+
+    if [[ "${strVendorFile}" == "-all" ]]
+    then
+
+      ShowMessage "show" "Vendor file: ALL"
+
+    else
+      ShowMessage "show" "Vendor file: ${strVendorFile}"
+
+      if [[ ! -z "${3}" && "${strVendorFile:0:1}" == "/" ]]
+      then
+        strVendorPathFile = "${strVendorFile}"
+
+        strProjectLink="link-$(echo ${strVendorFile} | awk -F/ '{print $NF}')"
+
+        ShowMessage "show" "Category   : ${3}"
+
+        if [[ ! -z "${3}" ]]
+        then
+          strCategory="${3}"
+
+        else
+          strCategory=1000
+
+        fi
+
+        strCategoryPath="$(GetCategoryPathFromCode ${strCategory})"
+
+        ShowMessage "show" "Cate Path  : ${strCategoryPath}"
+
+        if [[ ! -z "${4}" ]]
+        then
+          ShowMessage "show" "Project    : ${4}"
+
+          strProject="${4}"
+          strProjectPath="${ConfigThis_projects}/${strProject}"
+
+          if [[ ! -z "${5}" ]]
+          then
+            ShowMessage "show" "Platform   : ${5}"
+
+            strPlatform="${5}"
+
+            if [[ ! -z "${6}" ]]
+            then
+              ShowMessage "show" "Version    : ${6}"
+
+              strVersion="${6}"
+
+              strProjectPlatformVersionCategoryPath="${strProjectPath}/${strPlatform}_${strVersion}/${strCategoryPath}"
+
+              ShowMessage "show" "Full path  : ${strProjectPlatformVersionCategoryPath}"
+
+              if [[ ! -d "${strProjectPlatformVersionCategoryPath}" ||  -L "${strProjectPlatformVersionCategoryPath}" || ! -x "${strProjectPlatformVersionCategoryPath}" ]]
+              then
+                ShowMessage "show" "-----"
+                ShowMessage "show" "----- Project directory ${strProjectPlatformVersionCategoryPath} is not valid"
+                ShowMessage "show" "-----"
+
+                exit 0
+
+              fi
+
+            fi
+
+          fi
+
+        fi
+
+      else
+        strProjectLink="link-${strVendorFile}"
+
+        if [[ ! -z "${3}" ]]
+        then
+          ShowMessage "show" "Vendor     : ${3}"
+
+          strVendor="${3}"
+
+          if [[ ! -z "${4}" ]]
+          then
+            ShowMessage "show" "Category   : ${4}"
+
+            if [[ ! -z "${4}" ]]
+            then
+              strCategory="${4}"
+
+            else
+              strCategory=1000
+
+            fi
+
+            strCategoryPath="$(GetCategoryPathFromCode ${strCategory})"
+
+            ShowMessage "show" "Cate Path  : ${strCategoryPath}"
+
+            #REFACTOR test for valid strCategoryPath
+
+            if [[ ! -z "${5}" ]]
+            then
+              ShowMessage "show" "Project    : ${5}"
+
+              strProject="${5}"
+              strProjectPath="${ConfigThis_projects}/${strProject}"
+
+              if [[ ! -z "${6}" ]]
+              then
+                ShowMessage "show" "Platform   : ${6}"
+
+                strPlatform="${6}"
+
+                if [[ ! -z "${7}" ]]
+                then
+                  ShowMessage "show" "Version    : ${7}"
+
+                  strVersion="${7}"
+
+                  strProjectPlatformVersionCategoryPath="${strProjectPath}/${strPlatform}_${strVersion}/${strCategoryPath}"
+
+                  ShowMessage "show" "Full path  : ${strProjectPlatformVersionCategoryPath}"
+
+                  if [[ ! -d "${strProjectPlatformVersionCategoryPath}" ||  -L "${strProjectPlatformVersionCategoryPath}" || ! -x "${strProjectPlatformVersionCategoryPath}" ]]
+                  then
+                    ShowMessage "show" "-----"
+                    ShowMessage "info" "----- Project directory ${strProjectPlatformVersionCategoryPath} is not valid"
+                    ShowMessage "show" "-----"
+
+                    exit 0
+
+                  fi
+
+                fi
+
+              fi
+
+            fi
+
+            strVendorCategoryPath="${ConfigThis_vendors}/${strVendor}/${strCategoryPath}"
+
+            strVendorPathFile="${strVendorCategoryPath}/${strVendorFile}"
+
+            ShowMessage "show" "Vend path  : ${strVendorCategoryPath}"
+
+            if [[ ! -d "${strVendorCategoryPath}" ||  -L "${strVendorCategoryPath}" || ! -x "${strVendorCategoryPath}" ]]
+            then
+              ShowMessage "show" "-----"
+              ShowMessage "info" "----- Vendor directory ${strVendorCategoryPath} is not valid"
+              ShowMessage "show" "-----"
+
+              exit 0
+
+            fi
+
+          fi
+
+        fi
+
+      fi
+
+    fi
+
+    if [[ -f "${strProjectPlatformVersionCategoryPath}/${strProjectLink}" &&  -L "${strProjectPlatformVersionCategoryPath}/${strProjectLink}" ]]
+    then
+      ShowMessage "show" "-----"
+      ShowMessage "info" "----- ${strProjectLink} exists"
+      ShowMessage "show" "-----"
+
+      #ListDirectory "path" "f" "name" "indent" "label" "1"
+      ListDirectory "${strProjectPlatformVersionCategoryPath}" "l" "${strProjectLink}" "-----   " "link" "1"
+
+      ShowMessage "show" "-----"
+
+      exit 0
+
+    fi
+
+    if [[ ! -f "${strVendorPathFile}" && "${strVendorFile}" != "-all" ]]
+    then
+      ShowMessage "show" "-----"
+      ShowMessage "info" "----- ${strVendorPathFile} does not exist"
+      ShowMessage "show" "-----"
+
+      exit 0
+
+    fi
+
+    #---------------------------------------------------
+    #
+    # create a link - from aVendor to aProject
+    #
+    ShowMessage "show" "-----"
+    ShowMessage "show" "Create a link:"
+
+    if [[ "${strVendorFile}" == "-all" ]]
+    then
+      ShowMessage "show" "  From ${strVendorCategoryPath} all files"
+      ShowMessage "show" "  To   ${strProjectPlatformVersionCategoryPath}"
+
+      ThisItemList=$(sudo find ${strVendorCategoryPath} -maxdepth 1 -type f -executable | sort)
+
+      if [[ -n "${ThisItemList}" ]]
+      then
+        i=1
+
+        for ListThisItem in $ThisItemList
+        do
+          strProjectLink="link-$(echo ${ListThisItem} | awk -F/ '{print $NF}')"
+
+          if [[ ! -f "${strProjectPlatformVersionCategoryPath}/${strProjectLink}" &&  ! -L "${strProjectPlatformVersionCategoryPath}/${strProjectLink}" ]]
+          then
+            sudo ln -s "${ListThisItem}" "${strProjectPlatformVersionCategoryPath}/${strProjectLink}" 2>/dev/null
+
+            i=$(($i + 1))
+
+          else
+            ShowMessage "info" "----- ${strProjectLink} exists"
+
+          fi
+
+        done
+
+        ShowMessage "show" "-----"
+        ShowMessage "info" "----- ${i} links created in"
+        ShowMessage "info" "-----   ${strProjectPlatformVersionCategoryPath}"
+
+      else
+        ShowMessage "show" "-----"
+        ShowMessage "info" "----- No items found in this category ${strVendorCategoryPath}"
+
+      fi
+
+    else
+      ShowMessage "show" "  From ${strVendorPathFile}"
+      ShowMessage "show" "  To   ${strProjectPlatformVersionCategoryPath}/${strProjectLink}"
+
+      sudo ln -s "${strVendorPathFile}" "${strProjectPlatformVersionCategoryPath}/${strProjectLink}" 2>/dev/null
+    fi
+
+    ShowMessage "show" "-----"
+
+    sudo chown -R "${ConfigThis_owner}":"${ConfigThis_group}" "${strProjectPlatformVersionCategoryPath}" 2>/dev/null
+
+    find "${strProjectPlatformVersionCategoryPath}" -type l -exec chmod 770 '{}' \; 2>/dev/null
+
+    ThisFileCount=$(sudo find ${strProjectPlatformVersionCategoryPath} -maxdepth 1 -type l | wc -l)
+
+    if [[ -n "${ThisFileCount}" ]]
+    then
+      ShowMessage "show" "----- Link Count:  ${ThisFileCount}"
+
+    fi
+
+    ShowMessage "show" "-----"
+    ShowMessage "show" "----- Next:"
+    ShowMessage "show" "-----   List project links:"
+    ShowMessage "show" "-----     ConfigMake -links aProject | less"
+    ShowMessage "show" "-----     ConfigMake -links aProject aPlatform aVersion | less"
+    ShowMessage "show" "-----       | less // Note: this option supports paging of output"
+    ShowMessage "show" "-----"
+    ShowMessage "show" "-----   List all vendors:"
+    ShowMessage "show" "-----     ConfigMake -vendors"
+    ShowMessage "show" "-----"
+    ShowMessage "show" "-----   List all vendor executable files:"
+    ShowMessage "show" "-----     ConfigMake -files aVendor  | less"
+    ShowMessage "show" "-----     ConfigMake -files aVendor aCategory | less"
+    ShowMessage "show" "-----       aCategory valid values: 1000, 2000, 3000, ...9000"
+    ShowMessage "show" "-----       | less // Note: this option supports paging of output"
+    ShowMessage "show" "-----"
+
+  fi
+
+  exit 0
+
+fi
+
+#---------------------------------------------------
+#
+# check parameter 1 for '-links' - list project links
+# check parameter 2, 3, 4 for 'aProject' 'aPlatform' 'aVersion'
+#
+if [[ ! -z "${1}" && ( "${1}" == "-Links" || "${1}" == "--Links" || "${1}" == "-links" || "${1}" == "--links" ) ]]
+then
+  ThisProjectPath=""
+  ThisPlatformVersion=""
+
+  if [[ ! -z "${4}" ]]
+  then
+    ThisProjectPath="${2}"
+
+    ThisPlatformVersion="${3}_${4}"
+
+  else
+    if [[ ! -z "${3}" ]]
+    then
+      ShowMessage "show" " "
+      ShowMessage "show" "One or more parameters not provided"
+      ShowMessage "show" "[2] [ project      ] ${2}"
+      ShowMessage "show" "[3] [ platform     ] ${3}"
+      ShowMessage "show" "[4] [ version      ] ${4}"
+      ShowMessage "show" "-----"
+
+      exit 0
+
+    else
+      if [[ ! -z "${2}" ]]
+      then
+        ThisProjectPath="${2}"
+
+      else
+        ShowMessage "show" " "
+        ShowMessage "show" "One or more parameters not provided"
+        ShowMessage "show" "[2] [ project      ] ${2}"
+        ShowMessage "show" "[3] [ platform     ] ${3}"
+        ShowMessage "show" "[4] [ version      ] ${4}"
+        ShowMessage "show" "-----"
+
+        exit 0
+
+      fi
+
+    fi
+
+  fi
+
+  if [[ -d "${ConfigThis_projects}/${ThisProjectPath}"  && ! -L "${ConfigThis_projects}/${ThisProjectPath}" ]]
+  then
+    strProjectPath="${ConfigThis_projects}/${ThisProjectPath}"
+
+    ShowMessage "show" "----- List of link categories and links/counts in ${ThisProjectPath} ${ThisPlatformVersion}"
+
+    ThisPathList=$(sudo find ${strProjectPath} -maxdepth 1 -type d | sort)
+
+    # The variable 'ThisPathList' contains a sorted list of matching path names
+    #
+    #REFACTOR employ ListDirectory function - add -recursive flag
+    if [[ -n "${ThisPathList}" ]]
+    then
+      ShowMessage "show" "${ThisProjectPath}"
+
+      i=1
+
+      for ThisPath in $ThisPathList
+      do
+        if [[ -d "${ThisPath}" && ! -L "${ThisPath}" && -x "${ThisPath}" ]]
+        then
+          TempString="$( awk -v rmv="$strProjectPath" -v path="$ThisPath" 'BEGIN{sub(rmv,"",path); print path}' )"
+          TempString="$( awk -v rmv="/" -v path="$TempString" 'BEGIN{sub(rmv,"",path); print path}' )"
+
+          if [[ "${#TempString}" -gt 1 ]]
+          then
+            ShowMessage "show" "  ${i}) ${TempString}"
+            i=$(($i + 1))
+
+            if [[ "${#ThisPlatformVersion}" -eq 0 || ( "${#ThisPlatformVersion}" -gt 1 && "${TempString}" == "${ThisPlatformVersion}" ) ]]
+            then
+              ThisDirList=$(sudo find ${ThisPath} -maxdepth 1 -type d -name "config*" | sort)
+
+              if [[ -n "${ThisDirList}" ]]
+              then
+                j=1
+
+                for ThisDir in $ThisDirList
+                do
+                  if [[ -x "${ThisDir}" ]]
+                  then
+                    TempString="$( awk -v rmv="/$ThisPath/" -v path="/$ThisDir" 'BEGIN{sub(rmv,"",path); print path}' )"
+                    TempString="$( awk -v rmv="/" -v path="$TempString" 'BEGIN{sub(rmv,"",path); print path}' )"
+
+                    if [[ "${#TempString}" -gt 1 ]]
+                    then
+                      ShowMessage "show" "     ${j}) ${TempString}"
+                      j=$(($j + 1))
+
+                      ThisFileList=$(sudo find ${ThisDir} -maxdepth 1 -type l | sort)
+
+                      if [[ -n "${ThisFileList}" ]]
+                      then
+                        #ListDirectory "path" "f" "name" "indent" "label" "1"
+                        ListDirectory "${ThisDir}" "l" "" "        " "link" "1"
+
+                      fi
+
+                    fi
+
+                  fi
+
+                done
+
+              fi
+
+            fi
+
+          fi
+
+        fi
+
+      done
+
+    fi
+
+    ShowMessage "show" "-----"
+    ShowMessage "show" "----- Next:"
+
+    ShowMessage "show" "-----   Create a project link:"
+    ShowMessage "show" "-----     ConfigMake -link aFile aVendor aCategory aProject aPlatform aVersion"
+    ShowMessage "show" "-----       aCategory valid values: 1000, 2000, 3000, ...9000"
+    ShowMessage "show" "-----"
+    ShowMessage "show" "-----   List all vendors:"
+    ShowMessage "show" "-----     ConfigMake -vendors"
+    ShowMessage "show" "-----"
+    ShowMessage "show" "-----   List all vendor executable files:"
+    ShowMessage "show" "-----     ConfigMake -files aVendor  | less"
+    ShowMessage "show" "-----     ConfigMake -files aVendor aCategory | less"
+    ShowMessage "show" "-----       aCategory valid values: 1000, 2000, 3000, ...9000"
+    ShowMessage "show" "-----       | less // Note: this option supports paging of output"
+    ShowMessage "show" "-----"
+
+    exit 0
+
+  else
+    ShowMessage "show" " "
+    ShowMessage "show" "One or more parameters are not valid"
+    ShowMessage "show" "[2] [ project      ] ${2}"
+    ShowMessage "show" "[3] [ platform     ] ${3}"
+    ShowMessage "show" "[4] [ version      ] ${4}"
+    ShowMessage "show" "-----"
+
+    exit 0
+
+  fi
+
+fi
+
+#---------------------------------------------------
+#
+# check parameter 1 for '-project' or '-default'
+# check parameter 2, 3, 4 for 'aProject' 'aPlatform' 'aVersion'
+# check parameter 5, 6 for 'aGroup' 'aOwnwer'- chown values
+# default to './ConfigThis/aProject/dev_01'
+#
+if [[ ! -z "${1}" && ( "${1}" == "-Project" || "${1}" == "--Project" || "${1}" == "-project" || "${1}" == "--project" || "${1}" == "-p" || "${1}" == "-P" || "${1}" == "--p" || "${1}" == "--P" || "${1}" == "-Default" || "${1}" == "--Default" || "${1}" == "-default" || "${1}" == "--default" || "${1}" == "-D" || "${1}" == "-d" || "${1}" == "--D" || "${1}" == "--d" ) ]]
+then
+  if [[ "${1}" == "-Default" || "${1}" == "--Default" || "${1}" == "-default" || "${1}" == "--default" || "${1}" == "-D" || "${1}" == "-d" || "${1}" == "--D" || "${1}" == "--d" ]]
+  then
+    ShowMessage "show" "----- Make three default ${ConfigThis_projects} directories: "
+
+    ThisProjectPath="aProject"
+
+    MakeProjectDirs "${ConfigThis_projects}" "${ThisProjectPath}" "dev_01"
+
+    MakeProjectDirs "${ConfigThis_projects}" "${ThisProjectPath}" "test_01"
+
+    MakeProjectDirs "${ConfigThis_projects}" "${ThisProjectPath}" "prod_01"
+
+  else
+    if [[ ! -z "${4}" ]]
+    then
+      ThisProjectPath="${2}"
+
+      ThisPlatformVersion="${3}_${4}"
+
+    else
+      if [[ ! -z "${3}" ]]
+      then
+        ThisProjectPath="${2}"
+
+        ThisPlatformVersion="${3}_01"
+
+      else
+        if [[ ! -z "${2}" ]]
+        then
+          ThisProjectPath="${2}"
+
+        else
+          ShowMessage "show" " "
+          ShowMessage "show" "One or more parameters not provided"
+          ShowMessage "show" "[2] [ project      ] ${2}"
+          ShowMessage "show" "[3] [ platform     ] ${3}"
+          ShowMessage "show" "[4] [ version      ] ${4}"
+          ShowMessage "show" "-----"
+
+          exit 0
+
+        fi
+
+        ThisPlatformVersion="dev_01"
+
+      fi
+
+    fi
+
+    #---------------------------------------------------
+    #
+    # check parameter 5 for 'aGroup' - used to chown group:owner
+    #   parameters 2 [aProjectPath] 3 [aPlatform] 4 [aVersion] provided
+    #
+    if [[ ! -z "${5}" ]]
+    then
+      ShowMessage "show" "----- Checking parameter: group"
+
+      ConfigThis_group="${5}"
+
+      if [[ -z "$(grep "${ConfigThis_group}" /etc/group)" ]]
+      then
+        ShowMessage "show" "-----"
+        ShowMessage "info" "----- ERROR: ${ConfigThis_group} not a valid group"
+        ShowMessage "show" "-----"
+
+        exit 0
+
+      else
+        ShowMessage "show" "----- Default group set to ${ConfigThis_group}"
+
+      fi
+
+    fi
+
+    #---------------------------------------------------
+    #
+    # check parameter 6 for 'aOwner' - used to chown group:owner
+    #   parameter 5 [aGroup] provided
+    #
+    if [[ ! -z "${6}" ]]
+    then
+      ShowMessage "show" "----- Checking parameter: owner"
+
+      ConfigThis_owner="${6}"
+
+      if [[ ! "$(id -u ${ConfigThis_owner} 2>/dev/null)" ]]
+      then
+        ShowMessage "show" "-----"
+        ShowMessage "info" "----- ERROR: ${ConfigThis_owner} not a valid login ID"
+        ShowMessage "show" "-----"
+
+        exit 0
+
+      else
+        ShowMessage "show" "----- Default owner set to ${ConfigThis_owner}"
+
+      fi
+
+    else
+      ShowMessage "show" "----- Default owner set to ${ConfigThis_owner}"
+
+    fi
+
+    #---------------------------------------------------
+    #
+    # check for directory ProjectPath, create directory if none found
+    #   parameters have been processed already,
+    #
+    if [[ -d "${ConfigThis_projects}/${ThisProjectPath}"  && ! -L "${ConfigThis_projects}/${ThisProjectPath}" ]]
+    then
+      if [[ -d "${ConfigThis_projects}/${ThisProjectPath}/${ThisPlatformVersion}"  && ! -L "${ConfigThis_projects}/${ThisProjectPath}/${ThisPlatformVersion}" ]]
+      then
+        strProjectPath="${ConfigThis_projects}/${ThisProjectPath}"
+
+        ShowMessage "show" "----- List of link categories and links/counts"
+
+        ThisPathList=$(sudo find ${strProjectPath} -maxdepth 1 -type d | sort)
+
+        # The variable 'ThisPathList' contains a sorted list of matching path names
+        #
+        #REFACTOR employ ListDirectory function - add -recursive flag
+        if [[ -n "${ThisPathList}" ]]
+        then
+          ShowMessage "show" "${ThisProjectPath}"
+
+          i=1
+
+          for ThisPath in $ThisPathList
+          do
+            if [[ -d "${ThisPath}" && ! -L "${ThisPath}" && -x "${ThisPath}" ]]
+            then
+              TempString="$( awk -v rmv="$strProjectPath" -v path="$ThisPath" 'BEGIN{sub(rmv,"",path); print path}' )"
+              TempString="$( awk -v rmv="/" -v path="$TempString" 'BEGIN{sub(rmv,"",path); print path}' )"
+
+              if [[ "${#TempString}" -gt 1 ]]
+              then
+                ShowMessage "show" "  ${i}) ${TempString}"
+                i=$(($i + 1))
+              fi
+
+              ThisDirList=$(sudo find ${ThisPath} -maxdepth 1 -type d -name "config*" | sort)
+
+              if [[ -n "${ThisDirList}" ]]
+              then
+                j=1
+
+                for ThisDir in $ThisDirList
+                do
+                  if [[ -x "${ThisDir}" ]]
+                  then
+                    TempString="$( awk -v rmv="/$ThisPath/" -v path="/$ThisDir" 'BEGIN{sub(rmv,"",path); print path}' )"
+                    TempString="$( awk -v rmv="/" -v path="$TempString" 'BEGIN{sub(rmv,"",path); print path}' )"
+
+                    if [[ "${#TempString}" -gt 1 ]]
+                    then
+                      ShowMessage "show" "     ${j}) ${TempString}"
+                      j=$(($j + 1))
+
+                      ThisFileList=$(sudo find ${ThisDir} -maxdepth 1 -type l | sort)
+
+                      ThisFileCount=$(sudo find ${ThisDir} -maxdepth 1 -type l | wc -l)
+
+                      if [[ -n "${ThisFileList}" ]]
+                      then
+                        ShowMessage "show" "        [ has ${ThisFileCount} link(s) ]"
+
+                      fi
+
+                    fi
+
+                  fi
+
+                done
+
+              fi
+
+            fi
+
+          done
+
+        fi
+
+        ShowMessage "show" "-----"
+        ShowMessage "show" "----- Next:"
+        ShowMessage "show" "-----   List project links:"
+        ShowMessage "show" "-----     ConfigMake -links aProject | less"
+        ShowMessage "show" "-----     ConfigMake -links aProject aPlatform aVersion | less"
+        ShowMessage "show" "-----       | less // Note: this option supports paging of output"
+        ShowMessage "show" "-----"
+        ShowMessage "show" "-----   Create a project link:"
+        ShowMessage "show" "-----     ConfigMake -link aFile aVendor aCategory aProject aPlatform aVersion"
+        ShowMessage "show" "-----       aCategory valid values: 1000, 2000, 3000, ...9000"
+        ShowMessage "show" "-----"
+        ShowMessage "show" "-----   List all vendors:"
+        ShowMessage "show" "-----     ConfigMake -vendors"
+        ShowMessage "show" "-----"
+        ShowMessage "show" "-----   List all vendor executable files:"
+        ShowMessage "show" "-----     ConfigMake -files aVendor  | less"
+        ShowMessage "show" "-----     ConfigMake -files aVendor aCategory | less"
+        ShowMessage "show" "-----       aCategory valid values: 1000, 2000, 3000, ...9000"
+        ShowMessage "show" "-----       | less // Note: this option supports paging of output"
+        ShowMessage "show" "-----"
+
+        exit 0
+
+      else
+        ShowMessage "show" "----- Make top level directories"
+        ShowMessage "show" "-----   ${ConfigThis_projects}/${ThisProjectPath}/"
+        ShowMessage "show" "-----"
+
+        sudo mkdir -p "${ConfigThis_projects}/${ThisProjectPath}/" 2>/dev/null
+
+        CheckReturnCode $?
+
+      fi
+
+    else
+      ShowMessage "show" "----- Make top level directories"
+      ShowMessage "show" "-----   ${ConfigThis_projects}/${ThisProjectPath}/"
+      ShowMessage "show" "-----"
+
+      sudo mkdir -p "${ConfigThis_projects}/${ThisProjectPath}/${ThisPlatformVersion}" 2>/dev/null
+
+      CheckReturnCode $?
+
+    fi
+
+    #---------------------------------------------------
+    #
+    # check if both aProjectPath and at least aPlatform were provided
+    #
+    ShowMessage "show" "----- Make link category directories"
+    ShowMessage "show" "-----   ${ConfigThis_projects}/${ThisProjectPath}/${ThisPlatformVersion}"
+    ShowMessage "show" "-----"
+
+    MakeProjectDirs "${ConfigThis_projects}" "${ThisProjectPath}" "${ThisPlatformVersion}"
+
+  fi
+
+  #---------------------------------------------------
+  #
+  # check group - chown group:owner, default 'owner' if none defined
+  #
+  ShowMessage "show" "-----"
+  ShowMessage "show" "----- chown ${ConfigThis_owner}:${ConfigThis_group} recursively"
+  ShowMessage "show" "-----   ${ConfigThis_projects}/${ThisProjectPath}"
+  ShowMessage "show" "-----"
+
+  #REFACTOR: check if sudo already active - /var/lib/sudo timestamp file
+  ShowMessage "show" "----- If not previously provided enter the sudo root password:"
+  ShowMessage "show" "-----"
+
+  #REFACTOR: Limit chown to current platform_version if not new Project
+  sudo chown "${ConfigThis_owner}":"${ConfigThis_group}" "${ConfigThis_projects}" 2>/dev/null
+  sudo chown -R "${ConfigThis_owner}":"${ConfigThis_group}" "${ConfigThis_projects}/${ThisProjectPath}" 2>/dev/null
+
+  ShowMessage "show" "----- chmod 770 recursively"
+  ShowMessage "show" "-----   ${ConfigThis_projects}/${ThisProjectPath}"
+  ShowMessage "show" "-----"
+
+  sudo chmod -R 770 "${ConfigThis_projects}/${ThisProjectPath}" 2>/dev/null
+
+  CheckReturnCode $?
+
+  #---------------------------------------------------
+  #
+  # list the resultant directory structure
+  #
+  ShowMessage "show" "----- List the resultant directory structure"
+  ShowMessage "show" "${ConfigThis_projects}/${ThisProjectPath}"
+
+  strVendorPath="${ConfigThis_projects}/${ThisProjectPath}"
+
+  #ListDirectory "path" "f" "name" "indent" "label" "1"
+  ListDirectory "${strVendorPath}" "d" "" "  " "platform-version" "1"
+
+  ShowMessage "show" "-----"
+  ShowMessage "show" "----- Next:"
+  ShowMessage "show" "-----   List all projects:"
+  ShowMessage "show" "-----     ConfigMake -projects"
+  ShowMessage "show" "-----"
+  ShowMessage "show" "-----   List all project link categories and links/counts:"
+  ShowMessage "show" "-----     ConfigMake -project aProject"
+  ShowMessage "show" "-----"
+  ShowMessage "show" "-----   List project links:"
+  ShowMessage "show" "-----     ConfigMake -links aProject | less"
+  ShowMessage "show" "-----     ConfigMake -links aProject aPlatform aVersion | less"
+  ShowMessage "show" "-----       | less // Note: this option supports paging of output"
+
+  #---------------------------------------------------
+  #
+  # exit
+  #
+  ShowMessage "show" "${0}"
+  ShowMessage "show" "-----"
+
+  exit 0
+fi
+
+#---------------------------------------------------
+#
+# nothing was done
+#
+if [[ ! -z "${1}" ]]
+then
+  aStr="${1}"
+
+  if [[ "${aStr:0:1}" == "-" ]]
+  then
+
+    ShowMessage "info" "----- Invalid option ${1}"
+
+    strPathFileHelp="${ConfigThis_share}/ConfigMake.txt"
+
+    if [[ ! -f "${strPathFileHelp}" ]]
+    then
+      if [[ ! -f "ConfigMake.txt" ]]
+      then
+        ShowMessage "err" "setup error - missing ${ConfigThis_share}/ConfigMake.txt "
+
+      else
+        cat "ConfigMake.txt"
+
+      fi
+
+    else
+      cat "${strPathFileHelp}"
+
+    fi
+
+    exit 0
+
+  else
+    ShowMessage "show" "-----"
+    ShowMessage "info" "----- Invalid parameter ${1}"
+    ShowMessage "show" "-----"
+
+    exit 0
+
+  fi
+
+else
+  #---------------------------------------------------
+  #
+  # exit
+  #
+    ShowMessage "show" "${0}"
+    ShowMessage "show" "-----"
+
+fi
