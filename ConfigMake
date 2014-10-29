@@ -22,7 +22,6 @@
 #
 #  Misc:
 #  o Test for ConfigThis_editor before using editor
-#  o Check code for usage of "${}" style vs ${} or $
 #  o chown and chmod aProject/aPlatform_aVersion/ vs aProject/
 #  o Check for /var/lib/sudo timestamp file before prompting for sudo pw
 #  o see other in-line REFACTOR comments

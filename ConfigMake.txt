@@ -1,7 +1,7 @@
 +-----------------------------------------------------------------------------+
 | SETUP:                                                                      |
 |   chmod u+x ./ConfigMake         | Enable execution mode                    |
-|   ./ConfigMake -this aDataPath   | Make sys dir's, data dir, cp files, etc. |
+|   ./ConfigMake -this aDataPath   | Make sys dir, data dir, cp files, etc.   |
 | NOTES:                                                                      |
 |   Refer to ConfigThis.html for complete documentation                       |
 |   aDataPath is optional - defaults to ./                                    |
